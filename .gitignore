@@ -1,0 +1,5 @@
+customYolo/code/wandb
+
+.idea/
+.vscode/
+*.sw*
