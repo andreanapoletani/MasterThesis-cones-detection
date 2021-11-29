@@ -217,6 +217,13 @@ class LoadImages:
             # Read image
             self.count += 1
             img0 = cv2.imread(path)  # BGR
+
+            # custom black mask applied on img ---------------------------------
+            mask = cv2.imread('../blackmask.png',0)
+            img0 = cv2.bitwise_and(img0,img0,mask = mask)
+            print('../'+str(self.count)+'.jpg')
+            cv2.imwrite('../'+str(self.count)+'.jpg', img0)
+            # --------------------------------------------
             assert img0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
 
