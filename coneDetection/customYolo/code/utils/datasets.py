@@ -173,6 +173,10 @@ class LoadImages:
         videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
         ni, nv = len(images), len(videos)
 
+        # load black mask image
+        self.loadMask()
+
+
         self.img_size = img_size
         self.stride = stride
         self.files = images + videos
@@ -192,6 +196,7 @@ class LoadImages:
         return self
 
     def __next__(self):
+
         if self.count == self.nf:
             raise StopIteration
         path = self.files[self.count]
@@ -200,6 +205,8 @@ class LoadImages:
             # Read video
             self.mode = 'video'
             ret_val, img0 = self.cap.read()
+            if ret_val:
+                img0 = cv2.bitwise_and(img0,img0,mask = self.mask)
             if not ret_val:
                 self.count += 1
                 self.cap.release()
@@ -210,6 +217,7 @@ class LoadImages:
                     self.new_video(path)
                     ret_val, img0 = self.cap.read()
 
+
             self.frame += 1
             s = f'video {self.count + 1}/{self.nf} ({self.frame}/{self.frames}) {path}: '
 
@@ -219,10 +227,10 @@ class LoadImages:
             img0 = cv2.imread(path)  # BGR
 
             # custom black mask applied on img ---------------------------------
-            mask = cv2.imread('../blackmask.png',0)
+            mask = cv2.imread('blackmask.png',0)
             img0 = cv2.bitwise_and(img0,img0,mask = mask)
-            print('../'+str(self.count)+'.jpg')
-            cv2.imwrite('../'+str(self.count)+'.jpg', img0)
+            print(str(self.count)+'.jpg')
+            cv2.imwrite(str(self.count)+'.jpg', img0)
             # --------------------------------------------
             assert img0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
@@ -243,6 +251,10 @@ class LoadImages:
 
     def __len__(self):
         return self.nf  # number of files
+
+    def loadMask(self):
+        self.mask = cv2.imread('blackmask.png',0)
+        return self.mask
 
 
 class LoadWebcam:  # for inference
