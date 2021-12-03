@@ -227,13 +227,18 @@ class LoadImages:
             img0 = cv2.imread(path)  # BGR
 
             # custom black mask applied on img ---------------------------------
-            mask = cv2.imread('blackmask.png',0)
-            img0 = cv2.bitwise_and(img0,img0,mask = mask)
-            print(str(self.count)+'.jpg')
-            cv2.imwrite(str(self.count)+'.jpg', img0)
+            img0 = cv2.bitwise_and(img0,img0,mask = self.mask)
             # --------------------------------------------
             assert img0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
+
+            # -----------------------> TEST
+            # test inference on a ROI
+            print(img0.shape)
+            #img0 = img0[416:544, 576:704]
+            #img0 = img0[154:532, 160:538, :]
+            original_img = img0
+            img0 = img0[128:430, 225:1098]
 
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
@@ -242,7 +247,7 @@ class LoadImages:
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
-        return path, img, img0, self.cap, s
+        return path, img, img0, self.cap, s, original_img
 
     def new_video(self, path):
         self.frame = 0

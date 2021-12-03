@@ -91,7 +91,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     # Run inference
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
-    for path, im, im0s, vid_cap, s in dataset:
+    for path, im, im0s, vid_cap, s, original_img in dataset:
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
         im = im.half() if half else im.float()  # uint8 to fp16/32
@@ -106,6 +106,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         pred = model(im, augment=augment, visualize=visualize)
         t3 = time_sync()
         dt[1] += t3 - t2
+
 
         # NMS
         pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
@@ -129,10 +130,11 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             s += '%gx%g ' % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
-            annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+            annotator = Annotator(original_img, line_width=line_thickness, example=str(names))
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
+                det[:, :4] = scale_coords(im0.shape[2:], det[:, :4], original_img.shape).round()
 
                 # Print results
                 for c in det[:, -1].unique():
@@ -156,6 +158,10 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             # Print time (inference-only)
             LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
+
+            # rectangular ROI -----------------> TEST
+            #cv2.rectangle(im0, (220, 290), (420, 190), (255,0,0), 2)
+            #cv2.rectangle(im0, (340, 360), (940, 160), (255,0,0), 2)
 
             # Stream results
             im0 = annotator.result()
