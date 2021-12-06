@@ -623,10 +623,9 @@ def scale_coords(img1_shape, coords, img0_shape, padx, pady, ratio_pad=None):
     print(coords[:, [1, 3]])
     print(coords[:, :4])'''
 
-    #coords[:, [0, 2]] -= pad[0]  # x padding
-    #coords[:, [1, 3]] -= pad[1]  # y padding
-    #coords[:, :4] /= gain
-    print(padx, pady)
+    '''coords[:, [0, 2]] -= pad[0]  # x padding
+    coords[:, [1, 3]] -= pad[1]  # y padding
+    coords[:, :4] /= gain'''
     coords[:, [0, 2]] += padx
     coords[:, [1, 3]] += pady
 

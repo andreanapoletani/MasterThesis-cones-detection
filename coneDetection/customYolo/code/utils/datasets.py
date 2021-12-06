@@ -202,8 +202,12 @@ class LoadImages:
         path = self.files[self.count]
 
         # ROI coordinates
-        roix = [195, 515]
-        roiy = [170, 490]
+        '''roix = [195, 515]
+        roiy = [170, 490]'''
+        '''roix = [190, 1182]
+        roiy = [200, 392]'''
+        roix = [186, 1178]
+        roiy = [151, 407]
         padx = roix[0]
         pady = roiy[0]
 
@@ -244,18 +248,22 @@ class LoadImages:
 
             
             # test inference on a ROI
-            print(img0.shape)
+            #print(img0.shape)
             original_img = img0
             #img0 = img0[128:430, 225:1098] rettangolone centrale
             img0 = img0[roiy[0]:roiy[1], roix[0]:roix[1]]
             
-
+        img = img0
+        '''print('------------------')
+        print(img0.shape)
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
-
-        # Convert
+        print(img.shape)
+        print('------------------')
+        # Convert'''
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
+        
 
         return path, img, img0, self.cap, s, original_img, padx, pady, roix, roiy
 

@@ -1,0 +1,4 @@
+coneDetection/customYolo/code*.pyc
+.idea/
+.vscode/
+*.sw*
