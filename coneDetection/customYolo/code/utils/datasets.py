@@ -251,17 +251,13 @@ class LoadImages:
             
 
         # Padded resize
-        print("---------")
-        print(img0.shape)
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
-        print(img.shape)
-        print("---------")
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
-        return path, img, img0, self.cap, s, original_img, padx, pady
+        return path, img, img0, self.cap, s, original_img, padx, pady, roix, roiy
 
     def new_video(self, path):
         self.frame = 0

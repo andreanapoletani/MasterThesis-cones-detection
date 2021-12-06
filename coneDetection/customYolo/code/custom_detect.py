@@ -12,6 +12,7 @@ from pathlib import Path
 import cv2
 import torch
 import torch.backends.cudnn as cudnn
+import numpy as np
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -91,7 +92,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     # Run inference
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
-    for path, im, im0s, vid_cap, s, original_img, padx, pady in dataset:
+    for path, im, im0s, vid_cap, s, original_img, padx, pady, roix, roiy in dataset:
+
+
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
         im = im.half() if half else im.float()  # uint8 to fp16/32
@@ -164,8 +167,14 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             #cv2.rectangle(im0, (220, 290), (420, 190), (255,0,0), 2)
             #cv2.rectangle(im0, (340, 360), (940, 160), (255,0,0), 2)
 
+            
             # Stream results
             im0 = annotator.result()
+            blk = np.zeros(im0.shape, np.uint8)
+            cv2.rectangle(blk, (roix[0], roiy[1]), (roix[1], roiy[0]), (0, 255, 0), cv2.FILLED)
+            im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
+
+
             if view_img:
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
@@ -174,7 +183,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             if save_img:
                 if dataset.mode == 'image':
                     #cv2.imwrite(save_path, im0)
-                    cv2.imwrite(save_path, original_img)
+                    cv2.imwrite(save_path, im0)
                 else:  # 'video' or 'stream'
                     if vid_path[i] != save_path:  # new video
                         vid_path[i] = save_path
@@ -189,6 +198,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                             save_path += '.mp4'
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer[i].write(im0)
+      
 
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
