@@ -609,7 +609,7 @@ def resample_segments(segments, n=1000):
     return segments
 
 
-def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
+def scale_coords(img1_shape, coords, img0_shape, padx, pady, ratio_pad=None):
     # Rescale coords (xyxy) from img1_shape to img0_shape
     if ratio_pad is None:  # calculate from img0_shape
         gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])  # gain  = old / new
@@ -618,9 +618,22 @@ def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
         gain = ratio_pad[0][0]
         pad = ratio_pad[1]
 
-    coords[:, [0, 2]] -= pad[0]  # x padding
-    coords[:, [1, 3]] -= pad[1]  # y padding
-    coords[:, :4] /= gain
+    '''print("pre padding -----------")
+    print(coords[:, [0, 2]])
+    print(coords[:, [1, 3]])
+    print(coords[:, :4])'''
+
+    #coords[:, [0, 2]] -= pad[0]  # x padding
+    #coords[:, [1, 3]] -= pad[1]  # y padding
+    #coords[:, :4] /= gain
+    print(padx, pady)
+    coords[:, [0, 2]] += padx
+    coords[:, [1, 3]] += pady
+
+    '''print("post padding -----------")
+    print(coords[:, [0, 2]])
+    print(coords[:, [1, 3]])
+    print(coords[:, :4])'''
     clip_coords(coords, img0_shape)
     return coords
 

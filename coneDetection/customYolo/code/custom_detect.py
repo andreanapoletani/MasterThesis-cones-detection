@@ -91,7 +91,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     # Run inference
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
-    for path, im, im0s, vid_cap, s, original_img in dataset:
+    for path, im, im0s, vid_cap, s, original_img, padx, pady in dataset:
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
         im = im.half() if half else im.float()  # uint8 to fp16/32
@@ -130,11 +130,15 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             s += '%gx%g ' % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
+            #annotator = Annotator(original_img, line_width=line_thickness, example=str(names))
             annotator = Annotator(original_img, line_width=line_thickness, example=str(names))
             if len(det):
                 # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
-                det[:, :4] = scale_coords(im0.shape[2:], det[:, :4], original_img.shape).round()
+                print(im.shape[2:])
+                print(original_img.shape)
+                print(det[:, :4])
+                det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape, padx, pady).round()
+                #det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape).round()
 
                 # Print results
                 for c in det[:, -1].unique():
@@ -172,7 +176,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             # Save results (image with detections)
             if save_img:
                 if dataset.mode == 'image':
-                    cv2.imwrite(save_path, im0)
+                    #cv2.imwrite(save_path, im0)
+                    cv2.imwrite(save_path, original_img)
                 else:  # 'video' or 'stream'
                     if vid_path[i] != save_path:  # new video
                         vid_path[i] = save_path

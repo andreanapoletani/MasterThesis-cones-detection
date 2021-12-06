@@ -233,12 +233,19 @@ class LoadImages:
             s = f'image {self.count}/{self.nf} {path}: '
 
             # -----------------------> TEST
+
+            roix = [195, 515]
+            roiy = [170, 490]
             # test inference on a ROI
             print(img0.shape)
             #img0 = img0[416:544, 576:704]
             #img0 = img0[154:532, 160:538, :]
             original_img = img0
-            img0 = img0[128:430, 225:1098]
+            #img0 = img0[128:430, 225:1098] rettangolone centrale
+            img0 = img0[roiy[0]:roiy[1], roix[0]:roix[1]]
+            padx = roix[0]
+            pady = roiy[0]
+            
 
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
@@ -247,7 +254,7 @@ class LoadImages:
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
-        return path, img, img0, self.cap, s, original_img
+        return path, img, img0, self.cap, s, original_img, padx, pady
 
     def new_video(self, path):
         self.frame = 0
