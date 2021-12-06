@@ -134,9 +134,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             annotator = Annotator(original_img, line_width=line_thickness, example=str(names))
             if len(det):
                 # Rescale boxes from img_size to im0 size
-                print(im.shape[2:])
-                print(original_img.shape)
-                print(det[:, :4])
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape, padx, pady).round()
                 #det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape).round()
 
