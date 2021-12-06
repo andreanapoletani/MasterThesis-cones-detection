@@ -118,6 +118,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         # Second-stage classifier (optional)
         # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
 
+        center_coor = []
         # Process predictions
         for i, det in enumerate(pred):  # per image
             seen += 1
@@ -138,6 +139,15 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape, padx, pady).round()
+                center_x = (det[:, [2]] - det[:, [0]])/2
+                center_y = (det[:, [3]] - det[:, [1]])/2
+                print(center_x, center_y)
+                center_coor.append([center_x.data.tolist(), center_y.data.tolist()])
+                cCoor = np.array(center_coor)
+                length = cCoor.shape[0]
+                sum_x = np.sum(cCoor[:, 0])
+                sum_y = np.sum(cCoor[:, 1])
+                centroid = sum_x/length, sum_y/length
                 #det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape).round()
 
                 # Print results
@@ -167,13 +177,13 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             #cv2.rectangle(im0, (220, 290), (420, 190), (255,0,0), 2)
             #cv2.rectangle(im0, (340, 360), (940, 160), (255,0,0), 2)
 
-            
             # Stream results
             im0 = annotator.result()
             blk = np.zeros(im0.shape, np.uint8)
             cv2.rectangle(blk, (roix[0], roiy[1]), (roix[1], roiy[0]), (0, 255, 0), cv2.FILLED)
             im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
-
+            #im0 = cv2.rectangle(im0, (int(centroid[0])-400, int(centroid[1])-200), (int(centroid[0])+400, int(centroid[1])+200), (255, 0, 0), 1)
+            #im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)
 
             if view_img:
                 cv2.imshow(str(p), im0)
@@ -198,8 +208,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                             save_path += '.mp4'
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer[i].write(im0)
-      
-
+    
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
     LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}' % t)
