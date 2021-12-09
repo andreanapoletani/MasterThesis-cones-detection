@@ -13,6 +13,7 @@ import cv2
 import torch
 import torch.backends.cudnn as cudnn
 import numpy as np
+from kalmanfilter import KalmanFilter
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -78,6 +79,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     if pt:
         model.model.half() if half else model.model.float()
 
+    # Kalman Filter
+    kf = KalmanFilter()
+
     # Dataloader
     if webcam:
         view_img = check_imshow()
@@ -139,15 +143,30 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape, padx, pady).round()
-                center_x = (det[:, [2]] - det[:, [0]])/2
+                '''center_x = (det[:, [2]] - det[:, [0]])/2
                 center_y = (det[:, [3]] - det[:, [1]])/2
-                print(center_x, center_y)
+                #print(center_x, center_y)
                 center_coor.append([center_x.data.tolist(), center_y.data.tolist()])
                 cCoor = np.array(center_coor)
-                length = cCoor.shape[0]
+                length = torch.numel(center_x)#cCoor.shape[0]
                 sum_x = np.sum(cCoor[:, 0])
                 sum_y = np.sum(cCoor[:, 1])
                 centroid = sum_x/length, sum_y/length
+                print('---------------------')
+                print(det[:, [0, 2]])
+                print(det[:, [1, 3]])'''
+                '''print("-----------------")
+                print(center_x)
+                print(center_y)
+                print("->")
+                print(sum_x)
+                print(sum_y)
+                print(length)
+                print(centroid[0], centroid[1])
+                print("-----------------")'''
+                '''for c in cCoor:
+                    #print(c[0][0])
+                    cv2.circle(im0, (int(c[0][0]), int(c[1][0])), 2, (0, 255, 0), 1)'''
                 #det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape).round()
 
                 # Print results
@@ -169,7 +188,23 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         annotator.box_label(xyxy, label, color=colors(c, True))
                         if save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                    
+                    # Calculate center of boxes and centroid
+                    center_x = xyxy[0] + (xyxy[2].item() - xyxy[0].item())/2
+                    center_y = xyxy[1] + (xyxy[3].item() - xyxy[1].item())/2
+                    center_coor.append([center_x.data.tolist(), center_y.data.tolist()])
+                    cCoor = np.array(center_coor)
+                    length = len(center_coor)
+                    sum_x = np.sum(cCoor[:, 0])
+                    sum_y = np.sum(cCoor[:, 1])
+                    centroid = sum_x/length, sum_y/length
 
+            for i in range(0, 1):
+                if i == 0:
+                    predicted = kf.predict(650, 363)
+                predicted = kf.predict(centroid[0], centroid[1])
+                
+                    
             # Print time (inference-only)
             LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
 
@@ -179,11 +214,16 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             # Stream results
             im0 = annotator.result()
+            '''for i in range(0, 10):
+                predicted = kf.predict(predicted[0], predicted[1])
+                im0 = cv2.circle(im0, (int(predicted[0]), int(predicted[1])), 2, (20, 220, 0), 1)
+                print(predicted)'''
             blk = np.zeros(im0.shape, np.uint8)
             cv2.rectangle(blk, (roix[0], roiy[1]), (roix[1], roiy[0]), (0, 255, 0), cv2.FILLED)
             im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
-            #im0 = cv2.rectangle(im0, (int(centroid[0])-400, int(centroid[1])-200), (int(centroid[0])+400, int(centroid[1])+200), (255, 0, 0), 1)
-            #im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)
+            # Print centroid of BBoxes
+            im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)
+            #im0 = cv2.circle(im0, (int(predicted[0]), int(predicted[1])), 3, (0, 0, 255), 2)
 
             if view_img:
                 cv2.imshow(str(p), im0)
