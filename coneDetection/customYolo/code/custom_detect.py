@@ -79,8 +79,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     if pt:
         model.model.half() if half else model.model.float()
 
-    # Kalman Filter
-    kf = KalmanFilter()
 
     # Dataloader
     if webcam:
@@ -96,7 +94,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     # Run inference
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
-    for path, im, im0s, vid_cap, s, original_img, padx, pady, roix, roiy in dataset:
+    for path, im, im0s, vid_cap, s, original_img, padx, pady in dataset:
 
 
         t1 = time_sync()
@@ -143,30 +141,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape, padx, pady).round()
-                '''center_x = (det[:, [2]] - det[:, [0]])/2
-                center_y = (det[:, [3]] - det[:, [1]])/2
-                #print(center_x, center_y)
-                center_coor.append([center_x.data.tolist(), center_y.data.tolist()])
-                cCoor = np.array(center_coor)
-                length = torch.numel(center_x)#cCoor.shape[0]
-                sum_x = np.sum(cCoor[:, 0])
-                sum_y = np.sum(cCoor[:, 1])
-                centroid = sum_x/length, sum_y/length
-                print('---------------------')
-                print(det[:, [0, 2]])
-                print(det[:, [1, 3]])'''
-                '''print("-----------------")
-                print(center_x)
-                print(center_y)
-                print("->")
-                print(sum_x)
-                print(sum_y)
-                print(length)
-                print(centroid[0], centroid[1])
-                print("-----------------")'''
-                '''for c in cCoor:
-                    #print(c[0][0])
-                    cv2.circle(im0, (int(c[0][0]), int(c[1][0])), 2, (0, 255, 0), 1)'''
                 #det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape).round()
 
                 # Print results
@@ -199,27 +173,23 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                     sum_y = np.sum(cCoor[:, 1])
                     centroid = sum_x/length, sum_y/length
 
-            for i in range(0, 1):
-                if i == 0:
-                    predicted = kf.predict(650, 363)
-                predicted = kf.predict(centroid[0], centroid[1])
+                    # Update ROI coordinates
+                    # funzione da fare
+                    newRoi_x = [centroid[0]-32, centroid[0]+32]
+                    newRoi_y = [centroid[1]-32, centroid[1]+32]
+
+            dataset.updateROI(newRoi_x, newRoi_y)
                 
                     
             # Print time (inference-only)
             LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
 
-            # rectangular ROI -----------------> TEST
-            #cv2.rectangle(im0, (220, 290), (420, 190), (255,0,0), 2)
-            #cv2.rectangle(im0, (340, 360), (940, 160), (255,0,0), 2)
 
             # Stream results
             im0 = annotator.result()
-            '''for i in range(0, 10):
-                predicted = kf.predict(predicted[0], predicted[1])
-                im0 = cv2.circle(im0, (int(predicted[0]), int(predicted[1])), 2, (20, 220, 0), 1)
-                print(predicted)'''
             blk = np.zeros(im0.shape, np.uint8)
-            cv2.rectangle(blk, (roix[0], roiy[1]), (roix[1], roiy[0]), (0, 255, 0), cv2.FILLED)
+    
+            cv2.rectangle(blk, (int(newRoi_x[0]), int(newRoi_y[0])), (int(newRoi_x[1]), int(newRoi_y[1])), (0, 255, 0), cv2.FILLED)
             im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
             # Print centroid of BBoxes
             im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)

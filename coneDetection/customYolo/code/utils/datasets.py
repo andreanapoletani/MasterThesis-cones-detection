@@ -173,8 +173,12 @@ class LoadImages:
         videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
         ni, nv = len(images), len(videos)
 
-        # load black mask image
+        # Load black mask image
         self.loadMask()
+
+        # Initial ROI coordinates
+        self.roi_x = [186, 1178]
+        self.roi_y = [151, 407]
 
 
         self.img_size = img_size
@@ -201,15 +205,9 @@ class LoadImages:
             raise StopIteration
         path = self.files[self.count]
 
-        # ROI coordinates
-        '''roix = [195, 515]
-        roiy = [170, 490]'''
-        '''roix = [190, 1182]
-        roiy = [200, 392]'''
-        roix = [186, 1178]
-        roiy = [151, 407]
-        padx = roix[0]
-        pady = roiy[0]
+        # update ROI pad values
+        padx = self.roi_x[0]
+        pady = self.roi_y[0]
 
         if self.video_flag[self.count]:
             # Read video
@@ -218,7 +216,7 @@ class LoadImages:
             if ret_val:
                 img0 = cv2.bitwise_and(img0,img0,mask = self.mask)
                 original_img = img0
-                img0 = img0[roiy[0]:roiy[1], roix[0]:roix[1]]
+                img0 = img0[round(self.roi_y[0]):round(self.roi_y[1]), round(self.roi_x[0]):round(self.roi_x[1])]
             if not ret_val:
                 self.count += 1
                 self.cap.release()
@@ -251,7 +249,7 @@ class LoadImages:
             #print(img0.shape)
             original_img = img0
             #img0 = img0[128:430, 225:1098] rettangolone centrale
-            img0 = img0[roiy[0]:roiy[1], roix[0]:roix[1]]
+            #img0 = img0[roiy[0]:roiy[1], roix[0]:roix[1]]
             
         img = img0
         '''print('------------------')
@@ -265,7 +263,7 @@ class LoadImages:
         img = np.ascontiguousarray(img)
         
 
-        return path, img, img0, self.cap, s, original_img, padx, pady, roix, roiy
+        return path, img, img0, self.cap, s, original_img, padx, pady
 
     def new_video(self, path):
         self.frame = 0
@@ -279,6 +277,10 @@ class LoadImages:
         self.mask = cv2.imread('blackmask.png',0)
         return self.mask
 
+    def updateROI(self, x, y):
+        self.roi_x = x
+        self.roi_y = y
+        return self.roi_x, self.roi_y
 
 class LoadWebcam:  # for inference
     # YOLOv5 local webcam dataloader, i.e. `python detect.py --source 0`
