@@ -24,7 +24,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 from models.common import DetectMultiBackend
 from utils.datasets import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
 from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr,
-                           increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
+                           increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh, updateRoiCoordinates)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
 
@@ -121,6 +121,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
 
         center_coor = []
+        newRoi_xxyy = []
         # Process predictions
         for i, det in enumerate(pred):  # per image
             seen += 1
@@ -173,12 +174,22 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                     sum_y = np.sum(cCoor[:, 1])
                     centroid = sum_x/length, sum_y/length
 
-                    # Update ROI coordinates
-                    # funzione da fare
-                    newRoi_x = [centroid[0]-32, centroid[0]+32]
-                    newRoi_y = [centroid[1]-32, centroid[1]+32]
+                    # move center of ROI according to some criteria
+                    
 
-            dataset.updateROI(newRoi_x, newRoi_y)
+                    # Update ROI coordinates
+                    newRoi_xxyy = updateRoiCoordinates(centroid)
+                    '''print('-')
+                    print(newRoi_xxyy[0])
+                    print(newRoi_xxyy[1])
+                    print(newRoi_xxyy[0][0])
+                    print(newRoi_xxyy)
+                    print('-')'''
+                    #newRoi_x = [centroid[0]-32, centroid[0]+32]
+                    #newRoi_y = [centroid[1]-32, centroid[1]+32]
+
+            if (newRoi_xxyy):
+                dataset.updateROI(newRoi_xxyy[0], newRoi_xxyy[1])
                 
                     
             # Print time (inference-only)
@@ -188,12 +199,11 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             # Stream results
             im0 = annotator.result()
             blk = np.zeros(im0.shape, np.uint8)
-    
-            cv2.rectangle(blk, (int(newRoi_x[0]), int(newRoi_y[0])), (int(newRoi_x[1]), int(newRoi_y[1])), (0, 255, 0), cv2.FILLED)
+            if (newRoi_xxyy):
+                cv2.rectangle(blk, (int(newRoi_xxyy[0][0]), int(newRoi_xxyy[1][0])), (int(newRoi_xxyy[0][1]), int(newRoi_xxyy[1][1])), (0, 255, 0), cv2.FILLED)
             im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
             # Print centroid of BBoxes
             im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)
-            #im0 = cv2.circle(im0, (int(predicted[0]), int(predicted[1])), 3, (0, 0, 255), 2)
 
             if view_img:
                 cv2.imshow(str(p), im0)

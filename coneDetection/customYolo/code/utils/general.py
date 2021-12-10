@@ -611,6 +611,13 @@ def resample_segments(segments, n=1000):
 
 def scale_coords(img1_shape, coords, img0_shape, padx, pady, ratio_pad=None):
     # Rescale coords (xyxy) from img1_shape to img0_shape
+    if ratio_pad is None:  # calculate from img0_shape
+        gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])  # gain  = old / new
+        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2  # wh padding
+    else:
+        gain = ratio_pad[0][0]
+        pad = ratio_pad[1]
+
 
     coords[:, [0, 2]] += padx
     coords[:, [1, 3]] += pady
@@ -830,6 +837,9 @@ def increment_path(path, exist_ok=False, sep='', mkdir=False):
         path.mkdir(parents=True, exist_ok=True)  # make directory
     return path
 
-
+def updateRoiCoordinates(newCenter):
+    roixxyy = [[newCenter[0]-32, newCenter[0]+32],[newCenter[1]-32, newCenter[1]+32]]
+    return roixxyy
+    
 # Variables
 NCOLS = 0 if is_docker() else shutil.get_terminal_size().columns  # terminal window size for tqdm
