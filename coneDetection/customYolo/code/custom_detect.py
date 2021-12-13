@@ -178,15 +178,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                     
 
                     # Update ROI coordinates
-                    newRoi_xxyy = updateRoiCoordinates(centroid)
-                    '''print('-')
-                    print(newRoi_xxyy[0])
-                    print(newRoi_xxyy[1])
-                    print(newRoi_xxyy[0][0])
-                    print(newRoi_xxyy)
-                    print('-')'''
-                    #newRoi_x = [centroid[0]-32, centroid[0]+32]
-                    #newRoi_y = [centroid[1]-32, centroid[1]+32]
+                    width = 992
+                    height = 256
+                    newRoi_xxyy = updateRoiCoordinates(centroid, width, height, original_img.shape)
 
             if (newRoi_xxyy):
                 dataset.updateROI(newRoi_xxyy[0], newRoi_xxyy[1])

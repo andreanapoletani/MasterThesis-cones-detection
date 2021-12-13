@@ -837,8 +837,20 @@ def increment_path(path, exist_ok=False, sep='', mkdir=False):
         path.mkdir(parents=True, exist_ok=True)  # make directory
     return path
 
-def updateRoiCoordinates(newCenter):
-    roixxyy = [[newCenter[0]-32, newCenter[0]+32],[newCenter[1]-32, newCenter[1]+32]]
+def updateRoiCoordinates(newCenter, width, height, imgshape):
+    # Calculate pad to fit the img size
+    pady = 0
+    padx = 0
+    # vertical pad
+    if ((newCenter[1] - height/2) < 0):             pady = abs(0 - (newCenter[1] - height/2))
+    if ((newCenter[1] + height/2) > imgshape[0]):   pady = -((newCenter[1] + height/2) - imgshape[0])
+
+    # orizontal pad
+    if ((newCenter[0] - width/2) < 0):              padx = abs(0 - (newCenter[0] - width/2))
+    if ((newCenter[0] + width/2) > imgshape[1]):    padx = -((newCenter[0] + width/2) - imgshape[1])
+
+    center = [newCenter[0] + padx, newCenter[1] + pady]
+    roixxyy = [[center[0]-width/2, center[0]+width/2],[center[1]-height/2, center[1]+height/2]]
     return roixxyy
     
 # Variables
