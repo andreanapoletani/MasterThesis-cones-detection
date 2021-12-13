@@ -252,13 +252,6 @@ class LoadImages:
             #img0 = img0[roiy[0]:roiy[1], roix[0]:roix[1]]
             
         img = img0
-        '''print('------------------')
-        print(img0.shape)
-        # Padded resize
-        img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
-        print(img.shape)
-        print('------------------')
-        # Convert'''
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
         

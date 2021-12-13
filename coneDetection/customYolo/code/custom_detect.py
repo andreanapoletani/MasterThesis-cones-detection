@@ -24,7 +24,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 from models.common import DetectMultiBackend
 from utils.datasets import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
 from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr,
-                           increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh, updateRoiCoordinates)
+                           increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh, updateRoiCoordinates, predictRoiPosition)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
 
@@ -91,6 +91,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         bs = 1  # batch_size
     vid_path, vid_writer = [None] * bs, [None] * bs
 
+    old_nearestXY_blu = [0,0]
+    old_nearestXY_yellow = [0,0]
+
     # Run inference
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
@@ -122,6 +125,11 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
         center_coor = []
         newRoi_xxyy = []
+        predictedROI = []
+        nearestXY_blu = [0,0]
+        nearestXY_yellow = [0,0]
+        middlePoint = []
+
         # Process predictions
         for i, det in enumerate(pred):  # per image
             seen += 1
@@ -149,6 +157,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
+
+                # blu 0
+                # yellow 2
+                count_blu = 0
+                count_yellow = 0
+
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
                     if save_txt:  # Write to file
@@ -161,6 +175,24 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         c = int(cls)  # integer class
                         label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
                         annotator.box_label(xyxy, label, color=colors(c, True))
+
+
+                        if (cls == 0): # blu
+                            if (xyxy[3].item() > nearestXY_blu[1]): 
+                                nearestXY_blu[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
+                                nearestXY_blu[1]=xyxy[3].item()
+                                count_blu += 1
+
+                        if (cls == 2): # yellow
+                            if (xyxy[3].item() > nearestXY_yellow[1]): 
+                                nearestXY_yellow[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
+                                nearestXY_yellow[1]=xyxy[3].item()
+                                count_yellow += 1
+
+                        #if (nearestXY_blu == [0,0]): nearestXY_blu = old_nearestXY_blu
+                        #if (nearestXY_yellow == [0,0]): nearestXY_yellow = old_nearestXY_yellow
+                        
+
                         if save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
                     
@@ -168,19 +200,32 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                     center_x = xyxy[0] + (xyxy[2].item() - xyxy[0].item())/2
                     center_y = xyxy[1] + (xyxy[3].item() - xyxy[1].item())/2
                     center_coor.append([center_x.data.tolist(), center_y.data.tolist()])
-                    cCoor = np.array(center_coor)
-                    length = len(center_coor)
-                    sum_x = np.sum(cCoor[:, 0])
-                    sum_y = np.sum(cCoor[:, 1])
-                    centroid = sum_x/length, sum_y/length
 
-                    # move center of ROI according to some criteria
-                    
+                if (count_blu == 0):    nearestXY_blu = old_nearestXY_blu
+                if (count_yellow == 0): nearestXY_yellow = old_nearestXY_yellow
+                if (nearestXY_blu[1] - nearestXY_yellow[1] > 40): nearestXY_yellow = old_nearestXY_yellow
+                if (nearestXY_yellow[1] - nearestXY_blu[1] > 40): nearestXY_blu = old_nearestXY_blu
 
-                    # Update ROI coordinates
-                    width = 992
-                    height = 256
-                    newRoi_xxyy = updateRoiCoordinates(centroid, width, height, original_img.shape)
+            cCoor = np.array(center_coor)
+            length = len(center_coor)
+            #----------- RISOLVERE SE NON CI SONO CONI DETECTATI E VA FUORI VETTORI
+            sum_x = np.sum(cCoor[:, 0])
+            sum_y = np.sum(cCoor[:, 1])
+            centroid = sum_x/length, sum_y/length
+
+            if (nearestXY_blu[1] >= nearestXY_yellow[1]):
+                middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_yellow[1] + (nearestXY_blu[1] - nearestXY_yellow[1])/2
+            else:
+                middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2
+
+            # move center of ROI according to some criteria
+            predictedROI = predictRoiPosition(centroid, middlePoint)
+            predictedROI = centroid # -----> to be REMOVED
+
+            # Update ROI coordinates
+            ROI_width = 992
+            ROI_height = 256
+            newRoi_xxyy = updateRoiCoordinates(predictedROI, ROI_width, ROI_height, original_img.shape)
 
             if (newRoi_xxyy):
                 dataset.updateROI(newRoi_xxyy[0], newRoi_xxyy[1])
@@ -198,6 +243,18 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
             # Print centroid of BBoxes
             im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)
+            # Draw circle on mid points of nearest blu and yellow cones
+            im0 = cv2.circle(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), 3, (0, 255, 0), 2)
+            im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
+            # Draw circle on center point among nearest blu and yellow cone
+            if (nearestXY_blu[1] >= nearestXY_yellow[1]):
+                im0 = cv2.circle(im0, (int(nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2), int(nearestXY_yellow[1] + (nearestXY_blu[1] - nearestXY_yellow[1])/2)), 3, (0, 0, 255), 2)
+            else:
+                im0 = cv2.circle(im0, (int(nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2), int(nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2)), 3, (0, 0, 255), 2)
+            #cv2.line(im0, nearestXY_blu, nearestXY_yellow, (0, 255, 0), thickness=1, lineType=8)
+            im0 = cv2.arrowedLine(im0, (int(middlePoint[0]), int(middlePoint[1])), (int(centroid[0]), int(centroid[1])), (127, 0, 255), 1)
+
+
 
             if view_img:
                 cv2.imshow(str(p), im0)
@@ -222,6 +279,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                             save_path += '.mp4'
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer[i].write(im0)
+
+            old_nearestXY_blu = nearestXY_blu
+            old_nearestXY_yellow = nearestXY_yellow
     
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image

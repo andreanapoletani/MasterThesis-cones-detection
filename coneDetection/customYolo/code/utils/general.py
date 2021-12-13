@@ -837,6 +837,7 @@ def increment_path(path, exist_ok=False, sep='', mkdir=False):
         path.mkdir(parents=True, exist_ok=True)  # make directory
     return path
 
+
 def updateRoiCoordinates(newCenter, width, height, imgshape):
     # Calculate pad to fit the img size
     pady = 0
@@ -852,6 +853,12 @@ def updateRoiCoordinates(newCenter, width, height, imgshape):
     center = [newCenter[0] + padx, newCenter[1] + pady]
     roixxyy = [[center[0]-width/2, center[0]+width/2],[center[1]-height/2, center[1]+height/2]]
     return roixxyy
-    
+
+
+def predictRoiPosition(centroid, middlePoint):
+    res = 0
+    a=1  
+
+
 # Variables
 NCOLS = 0 if is_docker() else shutil.get_terminal_size().columns  # terminal window size for tqdm
