@@ -214,12 +214,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                     nearestXY_blu = old_nearestXY_blu
                     nearestXY_blu[1] += 5
 
-            cCoor = np.array(center_coor)
-            length = len(center_coor)
-            #----------- RISOLVERE SE NON CI SONO CONI DETECTATI E VA FUORI VETTORI
-            sum_x = np.sum(cCoor[:, 0])
-            sum_y = np.sum(cCoor[:, 1])
-            centroid = sum_x/length, sum_y/length
+                cCoor = np.array(center_coor)
+                length = len(center_coor)
+                #----------- RISOLVERE SE NON CI SONO CONI DETECTATI E VA FUORI VETTORI
+                sum_x = np.sum(cCoor[:, 0])
+                sum_y = np.sum(cCoor[:, 1])
+                centroid = sum_x/length, sum_y/length
 
             if (nearestXY_blu[1] >= nearestXY_yellow[1]):
                 middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_yellow[1] + (nearestXY_blu[1] - nearestXY_yellow[1])/2
