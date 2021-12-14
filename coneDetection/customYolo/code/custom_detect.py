@@ -188,23 +188,31 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                                 nearestXY_yellow[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
                                 nearestXY_yellow[1]=xyxy[3].item()
                                 count_yellow += 1
-
-                        #if (nearestXY_blu == [0,0]): nearestXY_blu = old_nearestXY_blu
-                        #if (nearestXY_yellow == [0,0]): nearestXY_yellow = old_nearestXY_yellow
                         
 
                         if save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
                     
                     # Calculate center of boxes and centroid
+                    '''bHeight = xyxy[3].item() - xyxy[1].item()
+                    bWidth  = xyxy[2].item() - xyxy[0].item()
+                    if (bHeight > 30 and bWidth >10):'''
                     center_x = xyxy[0] + (xyxy[2].item() - xyxy[0].item())/2
                     center_y = xyxy[1] + (xyxy[3].item() - xyxy[1].item())/2
                     center_coor.append([center_x.data.tolist(), center_y.data.tolist()])
 
-                if (count_blu == 0):    nearestXY_blu = old_nearestXY_blu
-                if (count_yellow == 0): nearestXY_yellow = old_nearestXY_yellow
-                if (nearestXY_blu[1] - nearestXY_yellow[1] > 40): nearestXY_yellow = old_nearestXY_yellow
-                if (nearestXY_yellow[1] - nearestXY_blu[1] > 40): nearestXY_blu = old_nearestXY_blu
+                if (count_blu == 0):    
+                    nearestXY_blu = old_nearestXY_blu
+                    nearestXY_blu[1] =+ 5
+                if (count_yellow == 0): 
+                    nearestXY_yellow = old_nearestXY_yellow
+                    nearestXY_yellow[1] += 5
+                if (nearestXY_blu[1] - nearestXY_yellow[1] > 40): 
+                    nearestXY_yellow = old_nearestXY_yellow
+                    nearestXY_yellow[1] += 5
+                if (nearestXY_yellow[1] - nearestXY_blu[1] > 40): 
+                    nearestXY_blu = old_nearestXY_blu
+                    nearestXY_blu[1] += 5
 
             cCoor = np.array(center_coor)
             length = len(center_coor)
@@ -253,6 +261,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 im0 = cv2.circle(im0, (int(nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2), int(nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2)), 3, (0, 0, 255), 2)
             #cv2.line(im0, nearestXY_blu, nearestXY_yellow, (0, 255, 0), thickness=1, lineType=8)
             im0 = cv2.arrowedLine(im0, (int(middlePoint[0]), int(middlePoint[1])), (int(centroid[0]), int(centroid[1])), (127, 0, 255), 1)
+            im0 = cv2.circle(im0, (int(predictedROI[0]), int(predictedROI[1])), 3, (127, 0, 255), 1)
+
 
 
 

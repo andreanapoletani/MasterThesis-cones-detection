@@ -856,8 +856,11 @@ def updateRoiCoordinates(newCenter, width, height, imgshape):
 
 
 def predictRoiPosition(centroid, middlePoint):
-    res = 0
-    a=1  
+    if (centroid[0] < middlePoint[0]):
+        res = centroid[0] + (middlePoint[0]-centroid[0])/2, centroid[1] + (middlePoint[1] - centroid[1])/2
+    else:
+        res = middlePoint[0] + (centroid[0]-middlePoint[0])/2, centroid[1] + (middlePoint[1] - centroid[1])/2
+    return res  
 
 
 # Variables
