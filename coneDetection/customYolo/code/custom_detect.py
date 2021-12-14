@@ -93,6 +93,11 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
     old_nearestXY_blu = [0,0]
     old_nearestXY_yellow = [0,0]
+    old_nearestBlu_wh = [0,0]
+    old_nearestYel_wh = [0,0]
+    nearestBlu_wh = [0,0]
+    nearestYel_wh = [0,0]
+    
 
     # Run inference
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
@@ -120,15 +125,14 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
         dt[2] += time_sync() - t3
 
-        # Second-stage classifier (optional)
-        # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
-
         center_coor = []
         newRoi_xxyy = []
         predictedROI = []
         nearestXY_blu = [0,0]
         nearestXY_yellow = [0,0]
         middlePoint = []
+        coor = []
+        remainingCones = []
 
         # Process predictions
         for i, det in enumerate(pred):  # per image
@@ -147,11 +151,27 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             imc = im0.copy() if save_crop else im0  # for save_crop
             #annotator = Annotator(original_img, line_width=line_thickness, example=str(names))
             annotator = Annotator(original_img, line_width=line_thickness, example=str(names))
+
+
+
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape, padx, pady).round()
-                #det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape).round()
-
+            
+                # Remove detection if the cone is too far (depending on dimension respect to the nearest of the same color)
+                # Tune the % of the width (ex: 30%)
+                for y, elem in enumerate(det[:, :].tolist()):
+                    print(nearestBlu_wh)
+                    print(nearestYel_wh)
+                    #if ((elem[5] == 0 and ((elem[2] - elem[0] < 0.3*nearestBlu_wh[0]) and (elem[3] - elem[1] < 0.3*nearestBlu_wh[1]))) or (elem[5] == 2 and ((elem[2] - elem[0] < 0.3*nearestYel_wh[0]) and (elem[3] - elem[1] < 0.3*nearestYel_wh[1]))) or (elem[5] == 1 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0]))):
+                    if ((elem[5] == 0 and (elem[2] - elem[0] < 0.3*nearestBlu_wh[0])) or (elem[5] == 2 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0])) or (elem[5] == 1 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0]))):
+                        #det = torch.cat(det[y, :],det[y+1, :])
+                        continue
+                    else:
+                        remainingCones.append(det[y, :].tolist())
+                if(remainingCones):
+                    det = torch.tensor(remainingCones, device=torch.device('cuda:0'))
+            
                 # Print results
                 for c in det[:, -1].unique():
                     n = (det[:, -1] == c).sum()  # detections per class
@@ -177,17 +197,18 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         annotator.box_label(xyxy, label, color=colors(c, True))
 
 
-                        if (cls == 0): # blu
-                            if (xyxy[3].item() > nearestXY_blu[1]): 
-                                nearestXY_blu[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
-                                nearestXY_blu[1]=xyxy[3].item()
-                                count_blu += 1
+                        # Update nearest cones (yellow and blu)
+                        if (cls == 0 and xyxy[3].item() > nearestXY_blu[1]): 
+                            nearestXY_blu[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
+                            nearestXY_blu[1]=xyxy[3].item()
+                            nearestBlu_wh = [xyxy[2].item() -  xyxy[0].item(), xyxy[3].item() -  xyxy[1].item()]
+                            count_blu += 1
 
-                        if (cls == 2): # yellow
-                            if (xyxy[3].item() > nearestXY_yellow[1]): 
-                                nearestXY_yellow[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
-                                nearestXY_yellow[1]=xyxy[3].item()
-                                count_yellow += 1
+                        if (cls == 2 and xyxy[3].item() > nearestXY_yellow[1]): 
+                            nearestXY_yellow[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
+                            nearestXY_yellow[1]=xyxy[3].item()
+                            nearestYel_wh = [xyxy[2].item() -  xyxy[0].item(), xyxy[3].item() -  xyxy[1].item()]
+                            count_yellow += 1
                         
 
                         if save_crop:
@@ -201,16 +222,19 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                     center_y = xyxy[1] + (xyxy[3].item() - xyxy[1].item())/2
                     center_coor.append([center_x.data.tolist(), center_y.data.tolist()])
 
+                # Check if a color is not present and consider the middlePoint of the nearest cone of the precedent frame
                 if (count_blu == 0):    
                     nearestXY_blu = old_nearestXY_blu
                     nearestXY_blu[1] =+ 5
                 if (count_yellow == 0): 
                     nearestXY_yellow = old_nearestXY_yellow
                     nearestXY_yellow[1] += 5
-                if (nearestXY_blu[1] - nearestXY_yellow[1] > 40): 
+
+                # Don't consider the middlePoint of cones too far (blu and yellow) or too far from camera (check con distance with the 0 of the y)
+                if ((nearestXY_blu[1] - nearestXY_yellow[1] > 40) and (nearestXY_yellow[1] < 0.2*original_img.shape[0])): 
                     nearestXY_yellow = old_nearestXY_yellow
                     nearestXY_yellow[1] += 5
-                if (nearestXY_yellow[1] - nearestXY_blu[1] > 40): 
+                if ((nearestXY_yellow[1] - nearestXY_blu[1] > 40) and (nearestXY_blu[1] < 0.2*original_img.shape[0])): 
                     nearestXY_blu = old_nearestXY_blu
                     nearestXY_blu[1] += 5
 
@@ -292,6 +316,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             old_nearestXY_blu = nearestXY_blu
             old_nearestXY_yellow = nearestXY_yellow
+            old_nearestBlu_wh = nearestBlu_wh
+            old_nearestYel_wh = nearestYel_wh
     
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
