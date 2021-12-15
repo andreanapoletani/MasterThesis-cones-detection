@@ -80,6 +80,13 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         model.model.half() if half else model.model.float()
 
 
+    old_nearestXY_blu = [0,0]
+    old_nearestXY_yellow = [0,0]
+    old_nearestBlu_wh = [0,0]
+    old_nearestYel_wh = [0,0]
+    nearestBlu_wh = [0,0]
+    nearestYel_wh = [0,0]
+    
     # Dataloader
     if webcam:
         view_img = check_imshow()
@@ -91,12 +98,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         bs = 1  # batch_size
     vid_path, vid_writer = [None] * bs, [None] * bs
 
-    old_nearestXY_blu = [0,0]
-    old_nearestXY_yellow = [0,0]
-    old_nearestBlu_wh = [0,0]
-    old_nearestYel_wh = [0,0]
-    nearestBlu_wh = [0,0]
-    nearestYel_wh = [0,0]
     
 
     # Run inference
@@ -149,7 +150,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             s += '%gx%g ' % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
-            #annotator = Annotator(original_img, line_width=line_thickness, example=str(names))
             annotator = Annotator(original_img, line_width=line_thickness, example=str(names))
 
 
@@ -161,11 +161,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 # Remove detection if the cone is too far (depending on dimension respect to the nearest of the same color)
                 # Tune the % of the width (ex: 30%)
                 for y, elem in enumerate(det[:, :].tolist()):
-                    print(nearestBlu_wh)
-                    print(nearestYel_wh)
                     #if ((elem[5] == 0 and ((elem[2] - elem[0] < 0.3*nearestBlu_wh[0]) and (elem[3] - elem[1] < 0.3*nearestBlu_wh[1]))) or (elem[5] == 2 and ((elem[2] - elem[0] < 0.3*nearestYel_wh[0]) and (elem[3] - elem[1] < 0.3*nearestYel_wh[1]))) or (elem[5] == 1 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0]))):
-                    if ((elem[5] == 0 and (elem[2] - elem[0] < 0.3*nearestBlu_wh[0])) or (elem[5] == 2 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0])) or (elem[5] == 1 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0]))):
-                        #det = torch.cat(det[y, :],det[y+1, :])
+                    if ((elem[5] == 0 and (elem[2] - elem[0] < 0.3*nearestBlu_wh[0])) or (elem[5] == 2 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0])) or (elem[5] == 1 and ((elem[2] - elem[0] < 0.3*nearestYel_wh[0]) or (elem[2] - elem[0] < 0.3*nearestBlu_wh[0])))):
                         continue
                     else:
                         remainingCones.append(det[y, :].tolist())
