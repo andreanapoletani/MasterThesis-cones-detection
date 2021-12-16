@@ -222,7 +222,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 # Check if a color is not present and consider the middlePoint of the nearest cone of the precedent frame
                 if (count_blu == 0):    
                     nearestXY_blu = old_nearestXY_blu
-                    nearestXY_blu[1] =+ 5
+                    nearestXY_blu[1] += 5
                 if (count_yellow == 0): 
                     nearestXY_yellow = old_nearestXY_yellow
                     nearestXY_yellow[1] += 5
