@@ -8,12 +8,14 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from scipy.linalg import block_diag
 
 import cv2
 import torch
 import torch.backends.cudnn as cudnn
 import numpy as np
-from kalmanfilter import KalmanFilter
+from filterpy.kalman import KalmanFilter
+from filterpy.common import Q_discrete_white_noise
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -86,7 +88,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     old_nearestYel_wh = [0,0]
     nearestBlu_wh = [0,0]
     nearestYel_wh = [0,0]
-    
+    oldMiddlePoint = [0,0]
+
     # Dataloader
     if webcam:
         view_img = check_imshow()
@@ -132,8 +135,19 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         nearestXY_blu = [0,0]
         nearestXY_yellow = [0,0]
         middlePoint = []
-        coor = []
         remainingCones = []
+
+        # Kalman Filter definition
+        '''f = KalmanFilter (dim_x=4, dim_z=2)
+        f.x = np.array([[original_img.shape[0]/2, original_img.shape[1]/2], [0,0]])   # position, velocity'''
+        f = KalmanFilter (dim_x=4, dim_z=2)
+        f.x = np.array([[original_img.shape[0]/2, original_img.shape[1]/2, 10,10]]).T   # position, velocity
+        f.F = np.array([ [1.,1.,1.,1.], [0.,1.,1.,1.], [0.,0.,1.,1.], [0.,0.,0.,1.]])
+        f.H = np.array([[1, 0, 0, 0],[0, 0, 1, 0]])
+        f.R = np.eye(2) * 0.35**2
+        #q = Q_discrete_white_noise(dim=2, dt=0.1, var=0.04**2)
+        #f.Q = block_diag(q, q)
+        f.P = np.eye(4) * 500.
 
         # Process predictions
         for i, det in enumerate(pred):  # per image
@@ -247,9 +261,37 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             else:
                 middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2
 
+            
+            # Test Kalman Filter --------------------
+            #z = np.array([[middlePoint[0]], [middlePoint[1]]])
+            z = np.array([[middlePoint[0]], [middlePoint[1]]])
+            #print(z.shape)
+
+            dx = nearestXY_blu[0] - old_nearestXY_blu[0]
+            dy = nearestXY_blu[1] - old_nearestXY_blu[1]
+            time = (time_sync() - t1)*1000
+            velocity = [dx/time, dy/time]
+            #print(velocity[0], velocity[1])
+            #f.F = np.array([[1.,1.],[0.,1.]])
+            
+
+            #print(f.x.shape)
+            #print(f.F.shape)
+            f.x[2] = velocity[0]
+            f.x[3] = velocity[1]
+            #print(f.x[2], f.x[3])
+            f.predict()
+            val = f.x
+            f.update(z)
+            print("middle points: " + str(middlePoint))
+            print("prediction: " + str(f.x[0].item()) + ", " + str(f.x[1].item())) 
+            print("velocity :" + str(f.x[2].item()) + ", " + str(f.x[3].item()))
+            
+
             # move center of ROI according to some criteria
             predictedROI = predictRoiPosition(centroid, middlePoint)
-            predictedROI = centroid # -----> to be REMOVED
+            #predictedROI = centroid # -----> to be REMOVED
+            predictedROI = [682, 279]
 
             # Update ROI coordinates
             ROI_width = 992
@@ -271,7 +313,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 cv2.rectangle(blk, (int(newRoi_xxyy[0][0]), int(newRoi_xxyy[1][0])), (int(newRoi_xxyy[0][1]), int(newRoi_xxyy[1][1])), (0, 255, 0), cv2.FILLED)
             im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
             # Print centroid of BBoxes
-            im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)
+            #im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)
             # Draw circle on mid points of nearest blu and yellow cones
             im0 = cv2.circle(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), 3, (0, 255, 0), 2)
             im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
@@ -280,10 +322,15 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 im0 = cv2.circle(im0, (int(nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2), int(nearestXY_yellow[1] + (nearestXY_blu[1] - nearestXY_yellow[1])/2)), 3, (0, 0, 255), 2)
             else:
                 im0 = cv2.circle(im0, (int(nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2), int(nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2)), 3, (0, 0, 255), 2)
-            #cv2.line(im0, nearestXY_blu, nearestXY_yellow, (0, 255, 0), thickness=1, lineType=8)
-            im0 = cv2.arrowedLine(im0, (int(middlePoint[0]), int(middlePoint[1])), (int(centroid[0]), int(centroid[1])), (127, 0, 255), 1)
-            im0 = cv2.circle(im0, (int(predictedROI[0]), int(predictedROI[1])), 3, (127, 0, 255), 1)
 
+            #im0 = cv2.arrowedLine(im0, (int(middlePoint[0]), int(middlePoint[1])), (int(centroid[0]), int(centroid[1])), (127, 0, 255), 1)
+            #im0 = cv2.circle(im0, (int(predictedROI[0]), int(predictedROI[1])), 3, (127, 0, 255), 1)
+            #dx = -(nearestXY_blu[0] - old_nearestXY_blu[0])
+            #dy = -(nearestXY_blu[1] - old_nearestXY_blu[1])
+            #im0 = cv2.arrowedLine(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), (int(nearestXY_blu[0] + dx), int(nearestXY_blu[1] + dy)), (127, 0, 255), 1)
+            im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 100, 0), 2)
+            im0 = cv2.circle(im0, (int(oldMiddlePoint[0]), int(oldMiddlePoint[1])), 6, (100, 100, 100), 2)
+            im0 = cv2.circle(im0, (int(val[0]), int(val[1])), 6, (200, 200, 200), 2)
 
 
 
@@ -315,6 +362,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             old_nearestXY_yellow = nearestXY_yellow
             old_nearestBlu_wh = nearestBlu_wh
             old_nearestYel_wh = nearestYel_wh
+
+            oldMiddlePoint = middlePoint
     
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
