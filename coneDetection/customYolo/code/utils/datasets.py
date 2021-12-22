@@ -214,7 +214,7 @@ class LoadImages:
             self.mode = 'video'
             ret_val, img0 = self.cap.read()
             if ret_val:
-                img0 = cv2.bitwise_and(img0,img0,mask = self.mask)
+                #img0 = cv2.bitwise_and(img0,img0,mask = self.mask)
                 original_img = img0
                 img0 = img0[round(self.roi_y[0]):round(self.roi_y[1]), round(self.roi_x[0]):round(self.roi_x[1])]
             if not ret_val:

@@ -5,10 +5,12 @@ Modified version of Yolov5 detect.
 """
 
 import argparse
+import math
 import os
 import sys
 from pathlib import Path
 from scipy.linalg import block_diag
+from scipy import interpolate
 
 import cv2
 import torch
@@ -89,6 +91,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     nearestBlu_wh = [0,0]
     nearestYel_wh = [0,0]
     oldMiddlePoint = [0,0]
+    precFrameTime = 0
+    rot_ext_xy = [0,0,0]
+
 
     # Dataloader
     if webcam:
@@ -109,7 +114,15 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     for path, im, im0s, vid_cap, s, original_img, padx, pady in dataset:
 
 
+        # Define roto ranslation matrices
+        '''theta = -math.pi
+
+        rot_matrix = np.array([[1,0,0], [0, math.cos(theta), -math.sin(theta)], [0, math.sin(theta), math.cos(theta)]])
+        transl_matrix = np.array([[1,0,0], [0,1,original_img.shape[0]], [0, 0, 1]])
+        transl_rot_matrix = np.matmul(transl_matrix, rot_matrix)'''
+
         t1 = time_sync()
+        #print((t1 - precFrameTime)*1000)
         im = torch.from_numpy(im).to(device)
         im = im.half() if half else im.float()  # uint8 to fp16/32
         im /= 255  # 0 - 255 to 0.0 - 1.0
@@ -283,9 +296,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             f.predict()
             val = f.x
             f.update(z)
-            print("middle points: " + str(middlePoint))
+            '''print("middle points: " + str(middlePoint))
             print("prediction: " + str(f.x[0].item()) + ", " + str(f.x[1].item())) 
-            print("velocity :" + str(f.x[2].item()) + ", " + str(f.x[3].item()))
+            print("velocity :" + str(f.x[2].item()) + ", " + str(f.x[3].item()))'''
             
 
             # move center of ROI according to some criteria
@@ -296,7 +309,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             # Update ROI coordinates
             ROI_width = 992
             ROI_height = 256
+
+            # Extrapolation
+            ext_xy = np.array([oldMiddlePoint[0] - 10*(middlePoint[0] - oldMiddlePoint[0]), oldMiddlePoint[1] - 10*(middlePoint[1] - oldMiddlePoint[1])])
+            predictedROI = ext_xy
             newRoi_xxyy = updateRoiCoordinates(predictedROI, ROI_width, ROI_height, original_img.shape)
+            
 
             if (newRoi_xxyy):
                 dataset.updateROI(newRoi_xxyy[0], newRoi_xxyy[1])
@@ -328,11 +346,16 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             #dx = -(nearestXY_blu[0] - old_nearestXY_blu[0])
             #dy = -(nearestXY_blu[1] - old_nearestXY_blu[1])
             #im0 = cv2.arrowedLine(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), (int(nearestXY_blu[0] + dx), int(nearestXY_blu[1] + dy)), (127, 0, 255), 1)
-            im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 100, 0), 2)
+            im0 = cv2.circle(im0, (int(f.x[0].item()), int(original_img.shape[0] - f.x[1].item())), 5, (255, 100, 0), 2)
             im0 = cv2.circle(im0, (int(oldMiddlePoint[0]), int(oldMiddlePoint[1])), 6, (100, 100, 100), 2)
-            im0 = cv2.circle(im0, (int(val[0]), int(val[1])), 6, (200, 200, 200), 2)
-
-
+            # Value of the state after the prediction and before the update
+            #im0 = cv2.circle(im0, (int(val[0]), int(val[1])), 6, (200, 200, 200), 2)
+            
+            
+            '''ext_x = oldMiddlePoint[0] + 2*(middlePoint[0] - oldMiddlePoint[0])
+            ext_y = oldMiddlePoint[1] + 2*(middlePoint[1] - oldMiddlePoint[1])'''
+            '''rot_ext_xy = np.matmul(transl_rot_matrix, ext_xy)'''
+            im0 = cv2.circle(im0, (int(ext_xy[0]), int(ext_xy[1])), 6, (0, 50, 200), 2)
 
             if view_img:
                 cv2.imshow(str(p), im0)
@@ -364,6 +387,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             old_nearestYel_wh = nearestYel_wh
 
             oldMiddlePoint = middlePoint
+            precFrameTime = t1
     
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
