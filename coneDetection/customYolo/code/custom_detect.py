@@ -273,24 +273,17 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             
             # Test Kalman Filter --------------------
-            #z = np.array([[middlePoint[0]], [middlePoint[1]]])
             z = np.array([[middlePoint[0]], [middlePoint[1]]])
-            #print(z.shape)
 
             dx = -(nearestXY_blu[0] - old_nearestXY_blu[0])
             dy = -(nearestXY_blu[1] - old_nearestXY_blu[1])
             #time = (time_sync() - t1)*1000
             time = t1*1000
             velocity = [dx/time, dy/time]
-            #print(velocity[0], velocity[1])
-            #f.F = np.array([[1.,1.],[0.,1.]])
-            
 
-            #print(f.x.shape)
-            #print(f.F.shape)
             f.x[2] = velocity[0]
             f.x[3] = velocity[1]
-            #print(f.x[2], f.x[3])
+
             f.predict()
             f.update(z)
             '''print("middle points: " + str(middlePoint))
