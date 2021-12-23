@@ -10,7 +10,7 @@ import os
 import sys
 from pathlib import Path
 from scipy.linalg import block_diag
-from scipy import interpolate
+from scipy.optimize import curve_fit
 
 import cv2
 import torch
@@ -86,8 +86,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
     old_nearestXY_blu = [0,0]
     old_nearestXY_yellow = [0,0]
-    old_nearestBlu_wh = [0,0]
-    old_nearestYel_wh = [0,0]
     nearestBlu_wh = [0,0]
     nearestYel_wh = [0,0]
     oldMiddlePoint = [0,0]
@@ -220,7 +218,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
                         annotator.box_label(xyxy, label, color=colors(c, True))
 
-
                         # Update nearest cones (yellow and blu)
                         if (cls == 0 and xyxy[3].item() > nearestXY_blu[1]): 
                             nearestXY_blu[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
@@ -280,9 +277,10 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             z = np.array([[middlePoint[0]], [middlePoint[1]]])
             #print(z.shape)
 
-            dx = nearestXY_blu[0] - old_nearestXY_blu[0]
-            dy = nearestXY_blu[1] - old_nearestXY_blu[1]
-            time = (time_sync() - t1)*1000
+            dx = -(nearestXY_blu[0] - old_nearestXY_blu[0])
+            dy = -(nearestXY_blu[1] - old_nearestXY_blu[1])
+            #time = (time_sync() - t1)*1000
+            time = t1*1000
             velocity = [dx/time, dy/time]
             #print(velocity[0], velocity[1])
             #f.F = np.array([[1.,1.],[0.,1.]])
@@ -294,7 +292,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             f.x[3] = velocity[1]
             #print(f.x[2], f.x[3])
             f.predict()
-            val = f.x
             f.update(z)
             '''print("middle points: " + str(middlePoint))
             print("prediction: " + str(f.x[0].item()) + ", " + str(f.x[1].item())) 
@@ -312,7 +309,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             # Extrapolation
             ext_xy = np.array([oldMiddlePoint[0] - 10*(middlePoint[0] - oldMiddlePoint[0]), oldMiddlePoint[1] - 10*(middlePoint[1] - oldMiddlePoint[1])])
-            predictedROI = ext_xy
+            #predictedROI = ext_xy
             newRoi_xxyy = updateRoiCoordinates(predictedROI, ROI_width, ROI_height, original_img.shape)
             
 
@@ -335,6 +332,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             # Draw circle on mid points of nearest blu and yellow cones
             im0 = cv2.circle(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), 3, (0, 255, 0), 2)
             im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
+
             # Draw circle on center point among nearest blu and yellow cone
             if (nearestXY_blu[1] >= nearestXY_yellow[1]):
                 im0 = cv2.circle(im0, (int(nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2), int(nearestXY_yellow[1] + (nearestXY_blu[1] - nearestXY_yellow[1])/2)), 3, (0, 0, 255), 2)
@@ -346,16 +344,24 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             #dx = -(nearestXY_blu[0] - old_nearestXY_blu[0])
             #dy = -(nearestXY_blu[1] - old_nearestXY_blu[1])
             #im0 = cv2.arrowedLine(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), (int(nearestXY_blu[0] + dx), int(nearestXY_blu[1] + dy)), (127, 0, 255), 1)
-            im0 = cv2.circle(im0, (int(f.x[0].item()), int(original_img.shape[0] - f.x[1].item())), 5, (255, 100, 0), 2)
-            im0 = cv2.circle(im0, (int(oldMiddlePoint[0]), int(oldMiddlePoint[1])), 6, (100, 100, 100), 2)
+            
+            # Kalman after update
+            im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 100, 0), 2)
+
+            # Old middle point
+            #im0 = cv2.circle(im0, (int(oldMiddlePoint[0]), int(oldMiddlePoint[1])), 6, (100, 100, 100), 2)
+
             # Value of the state after the prediction and before the update
             #im0 = cv2.circle(im0, (int(val[0]), int(val[1])), 6, (200, 200, 200), 2)
             
-            
-            '''ext_x = oldMiddlePoint[0] + 2*(middlePoint[0] - oldMiddlePoint[0])
-            ext_y = oldMiddlePoint[1] + 2*(middlePoint[1] - oldMiddlePoint[1])'''
-            '''rot_ext_xy = np.matmul(transl_rot_matrix, ext_xy)'''
-            im0 = cv2.circle(im0, (int(ext_xy[0]), int(ext_xy[1])), 6, (0, 50, 200), 2)
+            # Linear extrapolation on old middle point and actual middle point
+            #im0 = cv2.circle(im0, (int(ext_xy[0]), int(ext_xy[1])), 6, (0, 50, 200), 2)
+
+            x_vec = np.array([middlePoint[0], f.x[0].item()])
+            y_vec = np.array([middlePoint[1], f.x[1].item()])
+            points = np.array([[middlePoint[0], middlePoint[1]], [f.x[0].item(), f.x[1].item()]])
+            #im0 = cv2.polylines(im0, np.int32([points]), False, (0, 0, 255), 2)
+
 
             if view_img:
                 cv2.imshow(str(p), im0)
@@ -383,8 +389,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             old_nearestXY_blu = nearestXY_blu
             old_nearestXY_yellow = nearestXY_yellow
-            old_nearestBlu_wh = nearestBlu_wh
-            old_nearestYel_wh = nearestYel_wh
 
             oldMiddlePoint = middlePoint
             precFrameTime = t1
@@ -440,3 +444,4 @@ def main(opt):
 if __name__ == "__main__":
     opt = parse_opt()
     main(opt)
+
