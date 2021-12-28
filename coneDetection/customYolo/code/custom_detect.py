@@ -91,7 +91,29 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     oldMiddlePoint = [0,0]
     precFrameTime = 0
     rot_ext_xy = [0,0,0]
+    newRoi_xxyy = []
+    oldROI_xxyy = []
 
+    # Initial ROI values
+    predictedROI = [682, 279]
+    ROI_width = 992
+    ROI_height = 256
+
+
+
+    # Kalman Filter definition
+    '''f = KalmanFilter (dim_x=4, dim_z=2)
+    f.x = np.array([[original_img.shape[0]/2, original_img.shape[1]/2], [0,0]])   # position, velocity'''
+    f = KalmanFilter (dim_x=2, dim_z=2)
+    #f.x = np.array([[original_img.shape[0]/2, original_img.shape[1]/2, 10,10]]).T   # position, velocity caso x=4, z=2
+    f.x = np.array([[682, 150]]).T
+    #f.F = np.array([ [1.,1.,1.,1.], [0.,1.,1.,1.], [0.,0.,1.,1.], [0.,0.,0.,1.]])
+    f.F = np.array([ [1.,1.], [0.,1.],])
+    f.H = np.array([[1, 0],[0, 1]])
+    f.R = np.eye(2) * 0.35**2
+    #q = Q_discrete_white_noise(dim=2, dt=0.1, var=0.04**2)
+    #f.Q = block_diag(q, q)
+    f.P = np.eye(2) * 500.
 
     # Dataloader
     if webcam:
@@ -110,14 +132,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
     for path, im, im0s, vid_cap, s, original_img, padx, pady in dataset:
-
-
-        # Define roto ranslation matrices
-        '''theta = -math.pi
-
-        rot_matrix = np.array([[1,0,0], [0, math.cos(theta), -math.sin(theta)], [0, math.sin(theta), math.cos(theta)]])
-        transl_matrix = np.array([[1,0,0], [0,1,original_img.shape[0]], [0, 0, 1]])
-        transl_rot_matrix = np.matmul(transl_matrix, rot_matrix)'''
 
         t1 = time_sync()
         #print((t1 - precFrameTime)*1000)
@@ -141,24 +155,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         dt[2] += time_sync() - t3
 
         center_coor = []
-        newRoi_xxyy = []
-        predictedROI = []
+        #predictedROI = []
         nearestXY_blu = [0,0]
         nearestXY_yellow = [0,0]
         middlePoint = []
         remainingCones = []
 
-        # Kalman Filter definition
-        '''f = KalmanFilter (dim_x=4, dim_z=2)
-        f.x = np.array([[original_img.shape[0]/2, original_img.shape[1]/2], [0,0]])   # position, velocity'''
-        f = KalmanFilter (dim_x=4, dim_z=2)
-        f.x = np.array([[original_img.shape[0]/2, original_img.shape[1]/2, 10,10]]).T   # position, velocity
-        f.F = np.array([ [1.,1.,1.,1.], [0.,1.,1.,1.], [0.,0.,1.,1.], [0.,0.,0.,1.]])
-        f.H = np.array([[1, 0, 0, 0],[0, 0, 1, 0]])
-        f.R = np.eye(2) * 0.35**2
-        #q = Q_discrete_white_noise(dim=2, dt=0.1, var=0.04**2)
-        #f.Q = block_diag(q, q)
-        f.P = np.eye(4) * 500.
 
         # Process predictions
         for i, det in enumerate(pred):  # per image
@@ -236,9 +238,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
                     
                     # Calculate center of boxes and centroid
-                    '''bHeight = xyxy[3].item() - xyxy[1].item()
-                    bWidth  = xyxy[2].item() - xyxy[0].item()
-                    if (bHeight > 30 and bWidth >10):'''
                     center_x = xyxy[0] + (xyxy[2].item() - xyxy[0].item())/2
                     center_y = xyxy[1] + (xyxy[3].item() - xyxy[1].item())/2
                     center_coor.append([center_x.data.tolist(), center_y.data.tolist()])
@@ -246,18 +245,18 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 # Check if a color is not present and consider the middlePoint of the nearest cone of the precedent frame
                 if (count_blu == 0):    
                     nearestXY_blu = old_nearestXY_blu
-                    nearestXY_blu[1] += 5
+                    #nearestXY_blu[1] += 5
                 if (count_yellow == 0): 
                     nearestXY_yellow = old_nearestXY_yellow
-                    nearestXY_yellow[1] += 5
+                    #nearestXY_yellow[1] += 5
 
                 # Don't consider the middlePoint of cones too far (blu and yellow) or too far from camera (check con distance with the 0 of the y)
                 if ((nearestXY_blu[1] - nearestXY_yellow[1] > 40) and (nearestXY_yellow[1] < 0.2*original_img.shape[0])): 
                     nearestXY_yellow = old_nearestXY_yellow
-                    nearestXY_yellow[1] += 5
+                    #nearestXY_yellow[1] += 5
                 if ((nearestXY_yellow[1] - nearestXY_blu[1] > 40) and (nearestXY_blu[1] < 0.2*original_img.shape[0])): 
                     nearestXY_blu = old_nearestXY_blu
-                    nearestXY_blu[1] += 5
+                    #nearestXY_blu[1] += 5
 
                 cCoor = np.array(center_coor)
                 length = len(center_coor)
@@ -272,36 +271,53 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2
 
             
+            oldROI_xxyy = newRoi_xxyy
             # Test Kalman Filter --------------------
-            z = np.array([[middlePoint[0]], [middlePoint[1]]])
+            # observation on center of ROI
+            if (middlePoint == [0,0]):
+                z = np.array([[oldMiddlePoint[0]], [oldMiddlePoint[1]]])
+            else:
+                z = np.array([[middlePoint[0]], [middlePoint[1]]])
 
-            dx = -(nearestXY_blu[0] - old_nearestXY_blu[0])
-            dy = -(nearestXY_blu[1] - old_nearestXY_blu[1])
-            #time = (time_sync() - t1)*1000
-            time = t1*1000
-            velocity = [dx/time, dy/time]
+            # Calculate movement of midlle points on the axes
+            if (middlePoint[1] > oldMiddlePoint[1]):
+                dx = -(middlePoint[0] - oldMiddlePoint[0])
+                dy = -(middlePoint[1] - oldMiddlePoint[1])
+            else:
+                dx = middlePoint[0] - oldMiddlePoint[0]
+                dy = middlePoint[1] - oldMiddlePoint[1]
+            time = (time_sync() - t1)*1000
+            #time = t1*1000
+            velocity = 10
+            if (dx < 0): 
+                velocity_x = -velocity
+            else:
+                velocity_x = velocity
+            if (dy < 0): 
+                velocity_y = -velocity
+            else:
+                velocity_y = velocity
 
-            f.x[2] = velocity[0]
-            f.x[3] = velocity[1]
 
             f.predict()
+            predictedVal = f.x
             f.update(z)
-            '''print("middle points: " + str(middlePoint))
-            print("prediction: " + str(f.x[0].item()) + ", " + str(f.x[1].item())) 
-            print("velocity :" + str(f.x[2].item()) + ", " + str(f.x[3].item()))'''
+
+            print(dx)
+            print(velocity_x)
+            f.x[0] = f.x[0] + (velocity_x*time)
+            f.x[1] = f.x[1] + (velocity_y*time)
+            '''print("-")
+            print(f.x)'''
             
 
             # move center of ROI according to some criteria
-            predictedROI = predictRoiPosition(centroid, middlePoint)
+            #predictedROI = predictRoiPosition(centroid, middlePoint)
             #predictedROI = centroid # -----> to be REMOVED
-            predictedROI = [682, 279]
+            
+            #predictedROI = [682, 279]
+            predictedROI = [int(f.x[0].item()), int(f.x[1].item())]
 
-            # Update ROI coordinates
-            ROI_width = 992
-            ROI_height = 256
-
-            # Extrapolation
-            ext_xy = np.array([oldMiddlePoint[0] - 10*(middlePoint[0] - oldMiddlePoint[0]), oldMiddlePoint[1] - 10*(middlePoint[1] - oldMiddlePoint[1])])
             #predictedROI = ext_xy
             newRoi_xxyy = updateRoiCoordinates(predictedROI, ROI_width, ROI_height, original_img.shape)
             
@@ -313,12 +329,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             # Print time (inference-only)
             LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
 
-
             # Stream results
             im0 = annotator.result()
             blk = np.zeros(im0.shape, np.uint8)
             if (newRoi_xxyy):
                 cv2.rectangle(blk, (int(newRoi_xxyy[0][0]), int(newRoi_xxyy[1][0])), (int(newRoi_xxyy[0][1]), int(newRoi_xxyy[1][1])), (0, 255, 0), cv2.FILLED)
+                #cv2.rectangle(blk, (int(oldROI_xxyy[0][0]), int(oldROI_xxyy[1][0])), (int(oldROI_xxyy[0][1]), int(oldROI_xxyy[1][1])), (0, 255, 0), cv2.FILLED)
             im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
             # Print centroid of BBoxes
             #im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)
@@ -338,8 +354,13 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             #dy = -(nearestXY_blu[1] - old_nearestXY_blu[1])
             #im0 = cv2.arrowedLine(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), (int(nearestXY_blu[0] + dx), int(nearestXY_blu[1] + dy)), (127, 0, 255), 1)
             
+            # Center of ROI
+            #im0 = cv2.circle(im0, (int(predictedROI[0]), int(predictedROI[1])), 5, (255, 0, 255), 2)
+
+            # Kalman after prediction and before update
+            im0 = cv2.circle(im0, (int(predictedVal[0]), int(predictedVal[1])), 5, (0, 255, 0), 2)
             # Kalman after update
-            im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 100, 0), 2)
+            im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
 
             # Old middle point
             #im0 = cv2.circle(im0, (int(oldMiddlePoint[0]), int(oldMiddlePoint[1])), 6, (100, 100, 100), 2)
@@ -383,7 +404,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             old_nearestXY_blu = nearestXY_blu
             old_nearestXY_yellow = nearestXY_yellow
 
-            oldMiddlePoint = middlePoint
+            if (middlePoint != [0,0]):
+                oldMiddlePoint = middlePoint
             precFrameTime = t1
     
     # Print results
