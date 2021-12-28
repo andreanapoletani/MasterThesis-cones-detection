@@ -89,13 +89,10 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     nearestBlu_wh = [0,0]
     nearestYel_wh = [0,0]
     oldMiddlePoint = [0,0]
-    precFrameTime = 0
-    rot_ext_xy = [0,0,0]
     newRoi_xxyy = []
-    oldROI_xxyy = []
 
     # Model speed
-    velocity = 10
+    velocity = 12
 
     # Initial ROI values
     predictedROI = [682, 279]
@@ -110,8 +107,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     f.F = np.array([ [1.,1.], [0.,1.],])
     f.H = np.array([[1, 0],[0, 1]])
     f.R = np.eye(2) * 0.35**2
-    #q = Q_discrete_white_noise(dim=2, dt=0.1, var=0.04**2)
-    #f.Q = block_diag(q, q)
+    #f.Q = Q_discrete_white_noise(dim=2, dt=0.1, var=0.13)
     f.P = np.eye(2) * 500.
 
     # Dataloader
@@ -352,7 +348,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             if (middlePoint != [0,0]):
                 oldMiddlePoint = middlePoint
-            precFrameTime = t1
     
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
