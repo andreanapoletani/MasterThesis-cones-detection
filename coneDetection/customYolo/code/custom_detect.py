@@ -94,6 +94,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     newRoi_xxyy = []
     oldROI_xxyy = []
 
+    # Model speed
+    velocity = 10
+
     # Initial ROI values
     predictedROI = [682, 279]
     ROI_width = 992
@@ -102,12 +105,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
 
     # Kalman Filter definition
-    '''f = KalmanFilter (dim_x=4, dim_z=2)
-    f.x = np.array([[original_img.shape[0]/2, original_img.shape[1]/2], [0,0]])   # position, velocity'''
     f = KalmanFilter (dim_x=2, dim_z=2)
-    #f.x = np.array([[original_img.shape[0]/2, original_img.shape[1]/2, 10,10]]).T   # position, velocity caso x=4, z=2
     f.x = np.array([[682, 150]]).T
-    #f.F = np.array([ [1.,1.,1.,1.], [0.,1.,1.,1.], [0.,0.,1.,1.], [0.,0.,0.,1.]])
     f.F = np.array([ [1.,1.], [0.,1.],])
     f.H = np.array([[1, 0],[0, 1]])
     f.R = np.eye(2) * 0.35**2
@@ -154,8 +153,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
         dt[2] += time_sync() - t3
 
-        center_coor = []
-        #predictedROI = []
         nearestXY_blu = [0,0]
         nearestXY_yellow = [0,0]
         middlePoint = []
@@ -188,7 +185,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 # Remove detection if the cone is too far (depending on dimension respect to the nearest of the same color)
                 # Tune the % of the width (ex: 30%)
                 for y, elem in enumerate(det[:, :].tolist()):
-                    #if ((elem[5] == 0 and ((elem[2] - elem[0] < 0.3*nearestBlu_wh[0]) and (elem[3] - elem[1] < 0.3*nearestBlu_wh[1]))) or (elem[5] == 2 and ((elem[2] - elem[0] < 0.3*nearestYel_wh[0]) and (elem[3] - elem[1] < 0.3*nearestYel_wh[1]))) or (elem[5] == 1 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0]))):
                     if ((elem[5] == 0 and (elem[2] - elem[0] < 0.3*nearestBlu_wh[0])) or (elem[5] == 2 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0])) or (elem[5] == 1 and ((elem[2] - elem[0] < 0.3*nearestYel_wh[0]) or (elem[2] - elem[0] < 0.3*nearestBlu_wh[0])))):
                         continue
                     else:
@@ -237,33 +233,20 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         if save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
                     
-                    # Calculate center of boxes and centroid
-                    center_x = xyxy[0] + (xyxy[2].item() - xyxy[0].item())/2
-                    center_y = xyxy[1] + (xyxy[3].item() - xyxy[1].item())/2
-                    center_coor.append([center_x.data.tolist(), center_y.data.tolist()])
 
                 # Check if a color is not present and consider the middlePoint of the nearest cone of the precedent frame
                 if (count_blu == 0):    
                     nearestXY_blu = old_nearestXY_blu
-                    #nearestXY_blu[1] += 5
                 if (count_yellow == 0): 
                     nearestXY_yellow = old_nearestXY_yellow
-                    #nearestXY_yellow[1] += 5
 
                 # Don't consider the middlePoint of cones too far (blu and yellow) or too far from camera (check con distance with the 0 of the y)
                 if ((nearestXY_blu[1] - nearestXY_yellow[1] > 40) and (nearestXY_yellow[1] < 0.2*original_img.shape[0])): 
                     nearestXY_yellow = old_nearestXY_yellow
-                    #nearestXY_yellow[1] += 5
                 if ((nearestXY_yellow[1] - nearestXY_blu[1] > 40) and (nearestXY_blu[1] < 0.2*original_img.shape[0])): 
                     nearestXY_blu = old_nearestXY_blu
-                    #nearestXY_blu[1] += 5
 
-                cCoor = np.array(center_coor)
-                length = len(center_coor)
-                #----------- RISOLVERE SE NON CI SONO CONI DETECTATI E VA FUORI VETTORI
-                sum_x = np.sum(cCoor[:, 0])
-                sum_y = np.sum(cCoor[:, 1])
-                centroid = sum_x/length, sum_y/length
+
 
             if (nearestXY_blu[1] >= nearestXY_yellow[1]):
                 middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_yellow[1] + (nearestXY_blu[1] - nearestXY_yellow[1])/2
@@ -271,7 +254,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2
 
             
-            oldROI_xxyy = newRoi_xxyy
             # Test Kalman Filter --------------------
             # observation on center of ROI
             if (middlePoint == [0,0]):
@@ -287,8 +269,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 dx = middlePoint[0] - oldMiddlePoint[0]
                 dy = middlePoint[1] - oldMiddlePoint[1]
             time = (time_sync() - t1)*1000
-            #time = t1*1000
-            velocity = 10
             if (dx < 0): 
                 velocity_x = -velocity
             else:
@@ -303,19 +283,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             predictedVal = f.x
             f.update(z)
 
-            print(dx)
-            print(velocity_x)
+            # Update velocity
             f.x[0] = f.x[0] + (velocity_x*time)
             f.x[1] = f.x[1] + (velocity_y*time)
-            '''print("-")
-            print(f.x)'''
             
 
-            # move center of ROI according to some criteria
-            #predictedROI = predictRoiPosition(centroid, middlePoint)
-            #predictedROI = centroid # -----> to be REMOVED
-            
-            #predictedROI = [682, 279]
+            # move center of ROI on Kalman's result
             predictedROI = [int(f.x[0].item()), int(f.x[1].item())]
 
             #predictedROI = ext_xy
@@ -331,13 +304,13 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             # Stream results
             im0 = annotator.result()
+
+            # Draw semi-transparent ROI
             blk = np.zeros(im0.shape, np.uint8)
             if (newRoi_xxyy):
                 cv2.rectangle(blk, (int(newRoi_xxyy[0][0]), int(newRoi_xxyy[1][0])), (int(newRoi_xxyy[0][1]), int(newRoi_xxyy[1][1])), (0, 255, 0), cv2.FILLED)
-                #cv2.rectangle(blk, (int(oldROI_xxyy[0][0]), int(oldROI_xxyy[1][0])), (int(oldROI_xxyy[0][1]), int(oldROI_xxyy[1][1])), (0, 255, 0), cv2.FILLED)
             im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
-            # Print centroid of BBoxes
-            #im0 = cv2.circle(im0, (int(centroid[0]), int(centroid[1])), 3, (255, 0, 0), 2)
+
             # Draw circle on mid points of nearest blu and yellow cones
             im0 = cv2.circle(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), 3, (0, 255, 0), 2)
             im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
@@ -348,34 +321,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             else:
                 im0 = cv2.circle(im0, (int(nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2), int(nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2)), 3, (0, 0, 255), 2)
 
-            #im0 = cv2.arrowedLine(im0, (int(middlePoint[0]), int(middlePoint[1])), (int(centroid[0]), int(centroid[1])), (127, 0, 255), 1)
-            #im0 = cv2.circle(im0, (int(predictedROI[0]), int(predictedROI[1])), 3, (127, 0, 255), 1)
-            #dx = -(nearestXY_blu[0] - old_nearestXY_blu[0])
-            #dy = -(nearestXY_blu[1] - old_nearestXY_blu[1])
-            #im0 = cv2.arrowedLine(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), (int(nearestXY_blu[0] + dx), int(nearestXY_blu[1] + dy)), (127, 0, 255), 1)
-            
-            # Center of ROI
-            #im0 = cv2.circle(im0, (int(predictedROI[0]), int(predictedROI[1])), 5, (255, 0, 255), 2)
-
-            # Kalman after prediction and before update
-            im0 = cv2.circle(im0, (int(predictedVal[0]), int(predictedVal[1])), 5, (0, 255, 0), 2)
             # Kalman after update
             im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
-
-            # Old middle point
-            #im0 = cv2.circle(im0, (int(oldMiddlePoint[0]), int(oldMiddlePoint[1])), 6, (100, 100, 100), 2)
-
-            # Value of the state after the prediction and before the update
-            #im0 = cv2.circle(im0, (int(val[0]), int(val[1])), 6, (200, 200, 200), 2)
-            
-            # Linear extrapolation on old middle point and actual middle point
-            #im0 = cv2.circle(im0, (int(ext_xy[0]), int(ext_xy[1])), 6, (0, 50, 200), 2)
-
-            x_vec = np.array([middlePoint[0], f.x[0].item()])
-            y_vec = np.array([middlePoint[1], f.x[1].item()])
-            points = np.array([[middlePoint[0], middlePoint[1]], [f.x[0].item(), f.x[1].item()]])
-            #im0 = cv2.polylines(im0, np.int32([points]), False, (0, 0, 255), 2)
-
 
             if view_img:
                 cv2.imshow(str(p), im0)
@@ -384,7 +331,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             # Save results (image with detections)
             if save_img:
                 if dataset.mode == 'image':
-                    #cv2.imwrite(save_path, im0)
                     cv2.imwrite(save_path, im0)
                 else:  # 'video' or 'stream'
                     if vid_path[i] != save_path:  # new video
