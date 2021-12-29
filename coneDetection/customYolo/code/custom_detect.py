@@ -99,6 +99,11 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     ROI_width = 992
     ROI_height = 256
 
+    middlePointsArray = np.empty([10, 2], dtype=int)
+    middlePointsIndex = 0
+    avgMiddlePoint_x = 0
+    avgMiddlePoint_y = 0
+
 
 
     # Kalman Filter definition
@@ -251,19 +256,46 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             
             # Test Kalman Filter --------------------
-            # observation on center of ROI
+            if (middlePointsIndex == 10): middlePointsIndex = 0
+
             if (middlePoint == [0,0]):
-                z = np.array([[oldMiddlePoint[0]], [oldMiddlePoint[1]]])
+                middlePoint = oldMiddlePoint
+
+            middlePointsArray[middlePointsIndex] = middlePoint
+            middlePointsIndex += 1
+
+            if (middlePointsArray.all()):
+                middlePointsSum_x = middlePointsArray[:,0].sum()
+                middlePointsSum_y = middlePointsArray[:,1].sum()
+                nRowsCols = middlePointsArray.shape[0]
+                avgMiddlePoint_x = middlePointsSum_x/nRowsCols
+                avgMiddlePoint_y = middlePointsSum_y/nRowsCols
+                print(middlePointsArray)
+                print(middlePointsSum_x, middlePointsSum_y)
+                print(nRowsCols)
+                print(avgMiddlePoint_x, avgMiddlePoint_y)
+                z = np.array([[avgMiddlePoint_x], [avgMiddlePoint_y]])
             else:
                 z = np.array([[middlePoint[0]], [middlePoint[1]]])
 
+
+
+            '''# observation on center of ROI
+            if (middlePoint == [0,0]):
+                z = np.array([[oldMiddlePoint[0]], [oldMiddlePoint[1]]])
+            else:
+                z = np.array([[middlePoint[0]], [middlePoint[1]]])'''
+
             # Calculate movement of midlle points on the axes
+            
+            #if (middlePoint != [0,0]):
             if (middlePoint[1] > oldMiddlePoint[1]):
                 dx = -(middlePoint[0] - oldMiddlePoint[0])
                 dy = -(middlePoint[1] - oldMiddlePoint[1])
             else:
                 dx = middlePoint[0] - oldMiddlePoint[0]
                 dy = middlePoint[1] - oldMiddlePoint[1]
+
             time = (time_sync() - t1)*1000
             if (dx < 0): 
                 velocity_x = -velocity
@@ -312,10 +344,10 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
 
             # Draw circle on center point among nearest blu and yellow cone
-            if (nearestXY_blu[1] >= nearestXY_yellow[1]):
-                im0 = cv2.circle(im0, (int(nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2), int(nearestXY_yellow[1] + (nearestXY_blu[1] - nearestXY_yellow[1])/2)), 3, (0, 0, 255), 2)
-            else:
-                im0 = cv2.circle(im0, (int(nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2), int(nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2)), 3, (0, 0, 255), 2)
+            im0 = cv2.circle(im0, (int(middlePoint[0]), int(middlePoint[1])), 3, (0, 0, 255), 2)
+            im0 = cv2.circle(im0, (int(avgMiddlePoint_x), int(avgMiddlePoint_y)), 3, (0, 230, 230), 2)
+
+
 
             # Kalman after update
             im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
