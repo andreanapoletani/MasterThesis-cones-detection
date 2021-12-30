@@ -92,7 +92,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     newRoi_xxyy = []
 
     # Model speed
-    velocity = 12
+    velocity = 7
 
     # Initial ROI values
     predictedROI = [682, 279]
@@ -101,6 +101,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
     middlePointsArray = np.empty([10, 2], dtype=int)
     middlePointsIndex = 0
+    middlePointsCounter = 0
     avgMiddlePoint_x = 0
     avgMiddlePoint_y = 0
 
@@ -251,11 +252,15 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             if (nearestXY_blu[1] >= nearestXY_yellow[1]):
                 middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_yellow[1] + (nearestXY_blu[1] - nearestXY_yellow[1])/2
+                middlePointsCounter += 1
             else:
                 middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2
+                middlePointsCounter += 1
 
             
-            # Test Kalman Filter --------------------
+            # Kalman Filter
+
+            # Calculate observation with a median filter
             if (middlePointsIndex == 10): middlePointsIndex = 0
 
             if (middlePoint == [0,0]):
@@ -264,7 +269,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             middlePointsArray[middlePointsIndex] = middlePoint
             middlePointsIndex += 1
 
-            if (middlePointsArray.all()):
+            if (middlePointsCounter >= 10):
                 middlePointsSum_x = middlePointsArray[:,0].sum()
                 middlePointsSum_y = middlePointsArray[:,1].sum()
                 nRowsCols = middlePointsArray.shape[0]
@@ -297,14 +302,22 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 dy = middlePoint[1] - oldMiddlePoint[1]
 
             time = (time_sync() - t1)*1000
-            if (dx < 0): 
-                velocity_x = -velocity
+            if (count_blu != 0 and count_yellow != 0):
+                if (dx < 0): 
+                    velocity_x = -velocity
+                    old_velocity_x = velocity_x
+                else:
+                    velocity_x = velocity
+                    old_velocity_x = velocity_x
+                if (dy < 0): 
+                    velocity_y = -velocity
+                    old_velocity_y = velocity_y
+                else:
+                    velocity_y = velocity
+                    old_velocity_x = velocity_x
             else:
-                velocity_x = velocity
-            if (dy < 0): 
-                velocity_y = -velocity
-            else:
-                velocity_y = velocity
+                velocity_x = old_velocity_x
+                velocity_y = old_velocity_y
 
 
             f.predict()

@@ -267,7 +267,7 @@ class LoadImages:
         return self.nf  # number of files
 
     def loadMask(self):
-        self.mask = cv2.imread('blackmask.png',0)
+        self.mask = cv2.imread('blackmask_v2.png',0)
         return self.mask
 
     def updateROI(self, x, y):
