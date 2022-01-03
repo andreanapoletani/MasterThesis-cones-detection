@@ -2,6 +2,7 @@
 """
 Custom detection script.
 Modified version of Yolov5 detect.
+
 """
 
 import argparse
@@ -11,13 +12,19 @@ import sys
 from pathlib import Path
 from scipy.linalg import block_diag
 from scipy.optimize import curve_fit
+from scipy.linalg import inv
 
 import cv2
 import torch
 import torch.backends.cudnn as cudnn
 import numpy as np
-from filterpy.kalman import KalmanFilter
-from filterpy.common import Q_discrete_white_noise
+
+
+import numpy as np
+from numpy import dot, zeros, eye, isscalar, shape
+import numpy.linalg as linalg
+from helpers import pretty_str, reshape_z
+from kalman_filter import KalmanFilter
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -108,13 +115,14 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
 
     # Kalman Filter definition
-    f = KalmanFilter (dim_x=2, dim_z=2)
+    f = KalmanFilter(dim_x=2, dim_z=2)
     f.x = np.array([[682, 150]]).T
     f.F = np.array([ [1.,1.], [0.,1.],])
     f.H = np.array([[1, 0],[0, 1]])
     f.R = np.eye(2) * 0.35**2
     #f.Q = Q_discrete_white_noise(dim=2, dt=0.1, var=0.13)
     f.P = np.eye(2) * 500.
+
 
     # Dataloader
     if webcam:
@@ -275,10 +283,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 nRowsCols = middlePointsArray.shape[0]
                 avgMiddlePoint_x = middlePointsSum_x/nRowsCols
                 avgMiddlePoint_y = middlePointsSum_y/nRowsCols
-                print(middlePointsArray)
-                print(middlePointsSum_x, middlePointsSum_y)
-                print(nRowsCols)
-                print(avgMiddlePoint_x, avgMiddlePoint_y)
                 z = np.array([[avgMiddlePoint_x], [avgMiddlePoint_y]])
             else:
                 z = np.array([[middlePoint[0]], [middlePoint[1]]])
@@ -322,12 +326,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             f.predict()
             predictedVal = f.x
+            print("Old: " + str(f.x[0]) + str(f.x[1]))
             f.update(z)
 
             # Update velocity
             f.x[0] = f.x[0] + (velocity_x*time)
             f.x[1] = f.x[1] + (velocity_y*time)
-            
 
             # move center of ROI on Kalman's result
             predictedROI = [int(f.x[0].item()), int(f.x[1].item())]
@@ -364,6 +368,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             # Kalman after update
             im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
+
 
             if view_img:
                 cv2.imshow(str(p), im0)
@@ -440,7 +445,6 @@ def parse_opt():
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
     run(**vars(opt))
-
 
 if __name__ == "__main__":
     opt = parse_opt()
