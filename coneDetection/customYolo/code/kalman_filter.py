@@ -126,8 +126,8 @@ import sys
 import numpy as np
 from numpy import dot, zeros, eye, isscalar, shape
 import numpy.linalg as linalg
-from filterpy.stats import logpdf
-from filterpy.common import pretty_str, reshape_z
+from stats import logpdf
+from helpers import pretty_str, reshape_z
 
 
 class KalmanFilter(object):
