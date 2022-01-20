@@ -199,7 +199,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         continue
                     else:
                         remainingCones.append(det[y, :].tolist())
-                if(remainingCones):
+                if(remainingCones and device.type != 'cpu'):
                     det = torch.tensor(remainingCones, device=torch.device('cuda:0'))
             
                 # Print results
