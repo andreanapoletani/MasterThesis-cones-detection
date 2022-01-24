@@ -173,8 +173,12 @@ class LoadImages:
         videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
         ni, nv = len(images), len(videos)
 
-        # load black mask image
+        # Load black mask image
         self.loadMask()
+
+        # Initial ROI coordinates
+        self.roi_x = [186, 1178]
+        self.roi_y = [151, 407]
 
 
         self.img_size = img_size
@@ -201,12 +205,18 @@ class LoadImages:
             raise StopIteration
         path = self.files[self.count]
 
+        # update ROI pad values
+        padx = self.roi_x[0]
+        pady = self.roi_y[0]
+
         if self.video_flag[self.count]:
             # Read video
             self.mode = 'video'
             ret_val, img0 = self.cap.read()
             if ret_val:
                 img0 = cv2.bitwise_and(img0,img0,mask = self.mask)
+                original_img = img0
+                img0 = img0[round(self.roi_y[0]):round(self.roi_y[1]), round(self.roi_x[0]):round(self.roi_x[1])]
             if not ret_val:
                 self.count += 1
                 self.cap.release()
@@ -227,22 +237,26 @@ class LoadImages:
             img0 = cv2.imread(path)  # BGR
 
             # custom black mask applied on img ---------------------------------
-            mask = cv2.imread('blackmask.png',0)
-            img0 = cv2.bitwise_and(img0,img0,mask = mask)
-            print(str(self.count)+'.jpg')
-            cv2.imwrite(str(self.count)+'.jpg', img0)
+            img0 = cv2.bitwise_and(img0,img0,mask = self.mask)
             # --------------------------------------------
             assert img0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
 
-        # Padded resize
-        img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
+            # -----------------------> TEST
 
-        # Convert
+            
+            # test inference on a ROI
+            #print(img0.shape)
+            original_img = img0
+            #img0 = img0[128:430, 225:1098] rettangolone centrale
+            #img0 = img0[roiy[0]:roiy[1], roix[0]:roix[1]]
+            
+        img = img0
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
+        
 
-        return path, img, img0, self.cap, s
+        return path, img, img0, self.cap, s, original_img, padx, pady
 
     def new_video(self, path):
         self.frame = 0
@@ -253,9 +267,13 @@ class LoadImages:
         return self.nf  # number of files
 
     def loadMask(self):
-        self.mask = cv2.imread('blackmask.png',0)
+        self.mask = cv2.imread('blackmask_v2.png',0)
         return self.mask
 
+    def updateROI(self, x, y):
+        self.roi_x = x
+        self.roi_y = y
+        return self.roi_x, self.roi_y
 
 class LoadWebcam:  # for inference
     # YOLOv5 local webcam dataloader, i.e. `python detect.py --source 0`

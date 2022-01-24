@@ -2,16 +2,29 @@
 """
 Custom detection script.
 Modified version of Yolov5 detect.
+
 """
 
 import argparse
+import math
 import os
 import sys
 from pathlib import Path
+from scipy.linalg import block_diag
+from scipy.optimize import curve_fit
+from scipy.linalg import inv
 
 import cv2
 import torch
 import torch.backends.cudnn as cudnn
+import numpy as np
+
+
+import numpy as np
+from numpy import dot, zeros, eye, isscalar, shape
+import numpy.linalg as linalg
+from helpers import pretty_str, reshape_z
+from kalman_filter import KalmanFilter
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -22,7 +35,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 from models.common import DetectMultiBackend
 from utils.datasets import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
 from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr,
-                           increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
+                           increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh, updateRoiCoordinates, predictRoiPosition)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
 
@@ -77,6 +90,40 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     if pt:
         model.model.half() if half else model.model.float()
 
+
+    old_nearestXY_blu = [0,0]
+    old_nearestXY_yellow = [0,0]
+    nearestBlu_wh = [0,0]
+    nearestYel_wh = [0,0]
+    oldMiddlePoint = [0,0]
+    newRoi_xxyy = []
+
+    # Model speed
+    velocity = 7
+
+    # Initial ROI values
+    predictedROI = [682, 279]
+    ROI_width = 992
+    ROI_height = 256
+
+    middlePointsArray = np.empty([10, 2], dtype=int)
+    middlePointsIndex = 0
+    middlePointsCounter = 0
+    avgMiddlePoint_x = 0
+    avgMiddlePoint_y = 0
+
+
+
+    # Kalman Filter definition
+    f = KalmanFilter(dim_x=2, dim_z=2)
+    f.x = np.array([[682, 150]]).T
+    f.F = np.array([ [1.,1.], [0.,1.],])
+    f.H = np.array([[1, 0],[0, 1]])
+    f.R = np.eye(2) * 0.35**2
+    #f.Q = Q_discrete_white_noise(dim=2, dt=0.1, var=0.13)
+    f.P = np.eye(2) * 500.
+
+
     # Dataloader
     if webcam:
         view_img = check_imshow()
@@ -88,11 +135,15 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         bs = 1  # batch_size
     vid_path, vid_writer = [None] * bs, [None] * bs
 
+    
+
     # Run inference
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
-    for path, im, im0s, vid_cap, s in dataset:
+    for path, im, im0s, vid_cap, s, original_img, padx, pady in dataset:
+
         t1 = time_sync()
+        #print((t1 - precFrameTime)*1000)
         im = torch.from_numpy(im).to(device)
         im = im.half() if half else im.float()  # uint8 to fp16/32
         im /= 255  # 0 - 255 to 0.0 - 1.0
@@ -107,12 +158,16 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         t3 = time_sync()
         dt[1] += t3 - t2
 
+
         # NMS
         pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
         dt[2] += time_sync() - t3
 
-        # Second-stage classifier (optional)
-        # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
+        nearestXY_blu = [0,0]
+        nearestXY_yellow = [0,0]
+        middlePoint = []
+        remainingCones = []
+
 
         # Process predictions
         for i, det in enumerate(pred):  # per image
@@ -129,15 +184,34 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             s += '%gx%g ' % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
-            annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+            annotator = Annotator(original_img, line_width=line_thickness, example=str(names))
+
+
+
             if len(det):
                 # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
-
+                det[:, :4] = scale_coords(im.shape[2:], det[:, :4], original_img.shape, padx, pady).round()
+            
+                # Remove detection if the cone is too far (depending on dimension respect to the nearest of the same color)
+                # Tune the % of the width (ex: 30%)
+                for y, elem in enumerate(det[:, :].tolist()):
+                    if ((elem[5] == 0 and (elem[2] - elem[0] < 0.3*nearestBlu_wh[0])) or (elem[5] == 2 and (elem[2] - elem[0] < 0.3*nearestYel_wh[0])) or (elem[5] == 1 and ((elem[2] - elem[0] < 0.3*nearestYel_wh[0]) or (elem[2] - elem[0] < 0.3*nearestBlu_wh[0])))):
+                        continue
+                    else:
+                        remainingCones.append(det[y, :].tolist())
+                if(remainingCones and device.type != 'cpu'):
+                    det = torch.tensor(remainingCones, device=torch.device('cuda:0'))
+            
                 # Print results
                 for c in det[:, -1].unique():
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+
+
+                # blu 0
+                # yellow 2
+                count_blu = 0
+                count_yellow = 0
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
@@ -151,14 +225,151 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         c = int(cls)  # integer class
                         label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
                         annotator.box_label(xyxy, label, color=colors(c, True))
+
+                        # Update nearest cones (yellow and blu)
+                        if (cls == 0 and xyxy[3].item() > nearestXY_blu[1]): 
+                            nearestXY_blu[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
+                            nearestXY_blu[1]=xyxy[3].item()
+                            nearestBlu_wh = [xyxy[2].item() -  xyxy[0].item(), xyxy[3].item() -  xyxy[1].item()]
+                            count_blu += 1
+
+                        if (cls == 2 and xyxy[3].item() > nearestXY_yellow[1]): 
+                            nearestXY_yellow[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
+                            nearestXY_yellow[1]=xyxy[3].item()
+                            nearestYel_wh = [xyxy[2].item() -  xyxy[0].item(), xyxy[3].item() -  xyxy[1].item()]
+                            count_yellow += 1
+                        
+
                         if save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                    
 
+                # Check if a color is not present and consider the middlePoint of the nearest cone of the precedent frame
+                if (count_blu == 0):    
+                    nearestXY_blu = old_nearestXY_blu
+                if (count_yellow == 0): 
+                    nearestXY_yellow = old_nearestXY_yellow
+
+                # Don't consider the middlePoint of cones too far (blu and yellow) or too far from camera (check con distance with the 0 of the y)
+                if ((nearestXY_blu[1] - nearestXY_yellow[1] > 40) and (nearestXY_yellow[1] < 0.2*original_img.shape[0])): 
+                    nearestXY_yellow = old_nearestXY_yellow
+                if ((nearestXY_yellow[1] - nearestXY_blu[1] > 40) and (nearestXY_blu[1] < 0.2*original_img.shape[0])): 
+                    nearestXY_blu = old_nearestXY_blu
+
+
+
+            if (nearestXY_blu[1] >= nearestXY_yellow[1]):
+                middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_yellow[1] + (nearestXY_blu[1] - nearestXY_yellow[1])/2
+                middlePointsCounter += 1
+            else:
+                middlePoint = nearestXY_blu[0] + (nearestXY_yellow[0] - nearestXY_blu[0])/2, nearestXY_blu[1] + (nearestXY_yellow[1] - nearestXY_blu[1])/2
+                middlePointsCounter += 1
+
+            
+            # Kalman Filter
+
+            # Calculate observation with a median filter
+            if (middlePointsIndex == 10): middlePointsIndex = 0
+
+            if (middlePoint == [0,0]):
+                middlePoint = oldMiddlePoint
+
+            middlePointsArray[middlePointsIndex] = middlePoint
+            middlePointsIndex += 1
+
+            if (middlePointsCounter >= 10):
+                middlePointsSum_x = middlePointsArray[:,0].sum()
+                middlePointsSum_y = middlePointsArray[:,1].sum()
+                nRowsCols = middlePointsArray.shape[0]
+                avgMiddlePoint_x = middlePointsSum_x/nRowsCols
+                avgMiddlePoint_y = middlePointsSum_y/nRowsCols
+                z = np.array([[avgMiddlePoint_x], [avgMiddlePoint_y]])
+            else:
+                z = np.array([[middlePoint[0]], [middlePoint[1]]])
+
+
+
+            '''# observation on center of ROI
+            if (middlePoint == [0,0]):
+                z = np.array([[oldMiddlePoint[0]], [oldMiddlePoint[1]]])
+            else:
+                z = np.array([[middlePoint[0]], [middlePoint[1]]])'''
+
+            # Calculate movement of midlle points on the axes
+            
+            #if (middlePoint != [0,0]):
+            if (middlePoint[1] > oldMiddlePoint[1]):
+                dx = -(middlePoint[0] - oldMiddlePoint[0])
+                dy = -(middlePoint[1] - oldMiddlePoint[1])
+            else:
+                dx = middlePoint[0] - oldMiddlePoint[0]
+                dy = middlePoint[1] - oldMiddlePoint[1]
+
+            time = (time_sync() - t1)*1000
+            if (count_blu != 0 and count_yellow != 0):
+                if (dx < 0): 
+                    velocity_x = -velocity
+                    old_velocity_x = velocity_x
+                else:
+                    velocity_x = velocity
+                    old_velocity_x = velocity_x
+                if (dy < 0): 
+                    velocity_y = -velocity
+                    old_velocity_y = velocity_y
+                else:
+                    velocity_y = velocity
+                    old_velocity_x = velocity_x
+            else:
+                velocity_x = old_velocity_x
+                velocity_y = old_velocity_y
+
+
+            f.predict()
+            predictedVal = f.x
+            print("Old: " + str(f.x[0]) + str(f.x[1]))
+            f.update(z)
+
+            # Update velocity
+            f.x[0] = f.x[0] + (velocity_x*time)
+            f.x[1] = f.x[1] + (velocity_y*time)
+
+            # move center of ROI on Kalman's result
+            predictedROI = [int(f.x[0].item()), int(f.x[1].item())]
+
+            #predictedROI = ext_xy
+            newRoi_xxyy = updateRoiCoordinates(predictedROI, ROI_width, ROI_height, original_img.shape)
+            
+
+            if (newRoi_xxyy):
+                dataset.updateROI(newRoi_xxyy[0], newRoi_xxyy[1])
+                
+                    
             # Print time (inference-only)
             LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
 
             # Stream results
             im0 = annotator.result()
+
+            # Draw semi-transparent ROI
+            blk = np.zeros(im0.shape, np.uint8)
+            if (newRoi_xxyy):
+                cv2.rectangle(blk, (int(newRoi_xxyy[0][0]), int(newRoi_xxyy[1][0])), (int(newRoi_xxyy[0][1]), int(newRoi_xxyy[1][1])), (0, 255, 0), cv2.FILLED)
+            im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
+
+            # Draw circle on mid points of nearest blu and yellow cones
+            im0 = cv2.circle(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), 3, (0, 255, 0), 2)
+            im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
+
+            # Draw circle on center point among nearest blu and yellow cone
+            im0 = cv2.circle(im0, (int(middlePoint[0]), int(middlePoint[1])), 3, (0, 0, 255), 2)
+            im0 = cv2.circle(im0, (int(avgMiddlePoint_x), int(avgMiddlePoint_y)), 3, (0, 230, 230), 2)
+
+
+
+            # Kalman after update
+            im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
+
+
             if view_img:
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
@@ -182,6 +393,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer[i].write(im0)
 
+            old_nearestXY_blu = nearestXY_blu
+            old_nearestXY_yellow = nearestXY_yellow
+
+            if (middlePoint != [0,0]):
+                oldMiddlePoint = middlePoint
+    
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
     LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}' % t)
@@ -229,7 +446,7 @@ def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
     run(**vars(opt))
 
-
 if __name__ == "__main__":
     opt = parse_opt()
     main(opt)
+

@@ -105,6 +105,7 @@ def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleF
     dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
     if auto:  # minimum rectangle
         dw, dh = np.mod(dw, stride), np.mod(dh, stride)  # wh padding
+        print(dw, dh)
     elif scaleFill:  # stretch
         dw, dh = 0.0, 0.0
         new_unpad = (new_shape[1], new_shape[0])

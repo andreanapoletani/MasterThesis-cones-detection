@@ -1,5 +1,6 @@
 coneDetection/customYolo/code/wandb
 
+*.pyc
 .idea/
 .vscode/
 *.sw*
