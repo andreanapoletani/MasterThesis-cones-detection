@@ -417,7 +417,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     mean_line = ax.plot(plot_times, y_mean, label='Mean', linestyle='--')
     legend = ax.legend(loc='upper right')
     
-    plt.savefig('../volume/TesiMagistrale/inference_test/results/finalResults/RTX2070S_newVideo.png')
+    plt.savefig('../volume/TesiMagistrale/inference_test/results/finalResults/RTX2070S_oldVideo.png')
 
 
 def parse_opt():
