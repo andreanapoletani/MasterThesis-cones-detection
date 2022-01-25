@@ -212,6 +212,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
                 # blu 0
                 # yellow 2
+                # orange 1
                 count_blu = 0
                 count_yellow = 0
 
@@ -226,7 +227,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                     if save_img or save_crop or view_img:  # Add bbox to image
                         c = int(cls)  # integer class
                         label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                        annotator.box_label(xyxy, label, color=colors(c, True))
+                        if (c==0):
+                            annotator.box_label(xyxy, label, color=[255, 0, 0])
+                        if (c==2):
+                            annotator.box_label(xyxy, label, color=[0, 255, 255])
+                        if (c==1):
+                            annotator.box_label(xyxy, label, color=[26, 140, 255])
 
                         # Update nearest cones (yellow and blu)
                         if (cls == 0 and xyxy[3].item() > nearestXY_blu[1]): 
@@ -357,20 +363,20 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             blk = np.zeros(im0.shape, np.uint8)
             if (newRoi_xxyy):
                 cv2.rectangle(blk, (int(newRoi_xxyy[0][0]), int(newRoi_xxyy[1][0])), (int(newRoi_xxyy[0][1]), int(newRoi_xxyy[1][1])), (0, 255, 0), cv2.FILLED)
-            im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
+            #im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
 
             # Draw circle on mid points of nearest blu and yellow cones
-            im0 = cv2.circle(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), 3, (0, 255, 0), 2)
-            im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
+            #im0 = cv2.circle(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), 3, (0, 255, 0), 2)
+            #im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
 
             # Draw circle on center point among nearest blu and yellow cone
-            im0 = cv2.circle(im0, (int(middlePoint[0]), int(middlePoint[1])), 3, (0, 0, 255), 2)
-            im0 = cv2.circle(im0, (int(avgMiddlePoint_x), int(avgMiddlePoint_y)), 3, (0, 230, 230), 2)
+            #im0 = cv2.circle(im0, (int(middlePoint[0]), int(middlePoint[1])), 3, (0, 0, 255), 2)
+            #im0 = cv2.circle(im0, (int(avgMiddlePoint_x), int(avgMiddlePoint_y)), 3, (0, 230, 230), 2)
 
 
 
             # Kalman after update
-            im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
+            #im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
 
 
             if view_img:
@@ -417,7 +423,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     mean_line = ax.plot(plot_times, y_mean, label='Mean', linestyle='--')
     legend = ax.legend(loc='upper right')
     
-    plt.savefig('../volume/TesiMagistrale/inference_test/results/finalResults/RTX2070S_oldVideo.png')
+    #plt.savefig('../volume/TesiMagistrale/inference_test/results/finalResults/RTX2070S_oldVideo.png')
 
 
 def parse_opt():
