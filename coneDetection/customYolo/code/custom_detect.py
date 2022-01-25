@@ -18,6 +18,7 @@ import cv2
 import torch
 import torch.backends.cudnn as cudnn
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 import numpy as np
@@ -61,7 +62,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         project=ROOT / 'runs/detect',  # save results to project/name
         name='exp',  # save results to project/name
         exist_ok=False,  # existing project/name ok, do not increment
-        line_thickness=3,  # bounding box thickness (pixels)
+        line_thickness=1,  # bounding box thickness (pixels)
         hide_labels=False,  # hide labels
         hide_conf=False,  # hide confidences
         half=False,  # use FP16 half-precision inference
@@ -112,7 +113,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     avgMiddlePoint_x = 0
     avgMiddlePoint_y = 0
 
-
+    plot_times = []
+    plot_inference_times = []
 
     # Kalman Filter definition
     f = KalmanFilter(dim_x=2, dim_z=2)
@@ -326,7 +328,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             f.predict()
             predictedVal = f.x
-            print("Old: " + str(f.x[0]) + str(f.x[1]))
             f.update(z)
 
             # Update velocity
@@ -346,6 +347,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                     
             # Print time (inference-only)
             LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
+            plot_times.append(t3)
+            plot_inference_times.append(t3-t2)
 
             # Stream results
             im0 = annotator.result()
@@ -408,6 +411,14 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     if update:
         strip_optimizer(weights)  # update model (to fix SourceChangeWarning)
 
+    y_mean = [np.mean(plot_inference_times) for i in plot_inference_times]
+    ax = plt.subplot()
+    data_line = ax.plot(plot_times, plot_inference_times, label='Data')
+    mean_line = ax.plot(plot_times, y_mean, label='Mean', linestyle='--')
+    legend = ax.legend(loc='upper right')
+    
+    plt.savefig('../volume/TesiMagistrale/inference_test/results/finalResults/RTX2070S_newVideo.png')
+
 
 def parse_opt():
     parser = argparse.ArgumentParser()
@@ -431,7 +442,7 @@ def parse_opt():
     parser.add_argument('--project', default=ROOT / 'runs/detect', help='save results to project/name')
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
-    parser.add_argument('--line-thickness', default=3, type=int, help='bounding box thickness (pixels)')
+    parser.add_argument('--line-thickness', default=1, type=int, help='bounding box thickness (pixels)')
     parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
     parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
