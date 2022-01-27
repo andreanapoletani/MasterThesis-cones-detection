@@ -183,8 +183,7 @@ class LoadImages:
         # Initial ROI coordinates
         self.roi_x = [self.predictedROI[0]-(self.ROI_width/2), self.predictedROI[0]+(self.ROI_width/2)]
         self.roi_y = [self.predictedROI[1]-(self.ROI_height/2), self.predictedROI[1]+(self.ROI_height/2)]
-        '''self.roi_x = [186, 1178]
-        self.roi_y = [151, 407]'''
+        print(self.roi_x, self.roi_y)
 
 
         self.img_size = img_size
@@ -282,9 +281,9 @@ class LoadImages:
         settingsFilePath = "./settings.ini"
         config = configparser.ConfigParser()
         config.read(settingsFilePath)
-        self.ROI_width = config.getint('ROI_parameters','ROI_width')
-        self.ROI_height = config.getint('ROI_parameters','ROI_height')
-        self.predictedROI = [config.getint('ROI_parameters','ROI_middlePoint_x'), config.getint('ROI_parameters','ROI_middlePoint_y')]
+        self.ROI_width = config.getfloat('ROI_parameters','ROI_width')
+        self.ROI_height = config.getfloat('ROI_parameters','ROI_height')
+        self.predictedROI = [config.getfloat('ROI_parameters','ROI_middlePoint_x'), config.getfloat('ROI_parameters','ROI_middlePoint_y')]
         return self.ROI_width, self.ROI_height, self.predictedROI
 
     def updateROI(self, x, y):

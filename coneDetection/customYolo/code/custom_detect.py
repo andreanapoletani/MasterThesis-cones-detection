@@ -108,14 +108,16 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     nearestYel_wh = [0,0]
     oldMiddlePoint = [0,0]
     newRoi_xxyy = []
+    old_velocity_x = 0
+    old_velocity_y = 0
 
     # Model speed
     velocity = config.getint('Kalman','velocity')
 
     # Load initial ROI values from settings file
-    ROI_width = config.getint('ROI_parameters','ROI_width')
-    ROI_height = config.getint('ROI_parameters','ROI_height')
-    predictedROI = [config.getint('ROI_parameters','ROI_middlePoint_x'), config.getint('ROI_parameters','ROI_middlePoint_y')]
+    ROI_width = config.getfloat('ROI_parameters','ROI_width')
+    ROI_height = config.getfloat('ROI_parameters','ROI_height')
+    predictedROI = [config.getfloat('ROI_parameters','ROI_middlePoint_x'), config.getfloat('ROI_parameters','ROI_middlePoint_y')]
 
 
     middlePointsArray = np.empty([10, 2], dtype=int)
@@ -226,7 +228,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 # orange 1
                 count_blu = 0
                 count_yellow = 0
-
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
                     if save_txt:  # Write to file
@@ -420,7 +421,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
-    LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}' % t)
+    LOGGER.info(f'Speed: %.1fms pre-process, %.3fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}' % t)
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")

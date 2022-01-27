@@ -570,7 +570,7 @@ class Detections:
 
     def print(self):
         self.display(pprint=True)  # print results
-        LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {tuple(self.s)}' %
+        LOGGER.info(f'Speed: %.1fms pre-process, %.3fms inference, %.1fms NMS per image at shape {tuple(self.s)}' %
                     self.t)
 
     def show(self):
