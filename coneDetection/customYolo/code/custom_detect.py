@@ -13,6 +13,7 @@ from pathlib import Path
 from scipy.linalg import block_diag
 from scipy.optimize import curve_fit
 from scipy.linalg import inv
+import configparser
 
 import cv2
 import torch
@@ -39,6 +40,11 @@ from utils.general import (LOGGER, check_file, check_img_size, check_imshow, che
                            increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh, updateRoiCoordinates, predictRoiPosition)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
+
+# Load settings file
+settingsFilePath = "./settings.ini"
+config = configparser.ConfigParser()
+config.read(settingsFilePath)
 
 
 @torch.no_grad()
@@ -100,12 +106,13 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     newRoi_xxyy = []
 
     # Model speed
-    velocity = 7
+    velocity = config.getint('Kalman','velocity')
 
-    # Initial ROI values
-    predictedROI = [682, 279]
-    ROI_width = 992
-    ROI_height = 256
+    # Load initial ROI values from settings file
+    ROI_width = config.getint('ROI_parameters','ROI_width')
+    ROI_height = config.getint('ROI_parameters','ROI_height')
+    predictedROI = [config.getint('ROI_parameters','ROI_middlePoint_x'), config.getint('ROI_parameters','ROI_middlePoint_y')]
+
 
     middlePointsArray = np.empty([10, 2], dtype=int)
     middlePointsIndex = 0
@@ -363,20 +370,20 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             blk = np.zeros(im0.shape, np.uint8)
             if (newRoi_xxyy):
                 cv2.rectangle(blk, (int(newRoi_xxyy[0][0]), int(newRoi_xxyy[1][0])), (int(newRoi_xxyy[0][1]), int(newRoi_xxyy[1][1])), (0, 255, 0), cv2.FILLED)
-            #im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
+            im0 = cv2.addWeighted(im0, 1.0, blk, 0.25, 1)
 
             # Draw circle on mid points of nearest blu and yellow cones
-            #im0 = cv2.circle(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), 3, (0, 255, 0), 2)
-            #im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
+            im0 = cv2.circle(im0, (int(nearestXY_blu[0]), int(nearestXY_blu[1])), 3, (0, 255, 0), 2)
+            im0 = cv2.circle(im0, (int(nearestXY_yellow[0]), int(nearestXY_yellow[1])), 3, (0, 255, 0), 2)
 
             # Draw circle on center point among nearest blu and yellow cone
-            #im0 = cv2.circle(im0, (int(middlePoint[0]), int(middlePoint[1])), 3, (0, 0, 255), 2)
-            #im0 = cv2.circle(im0, (int(avgMiddlePoint_x), int(avgMiddlePoint_y)), 3, (0, 230, 230), 2)
+            im0 = cv2.circle(im0, (int(middlePoint[0]), int(middlePoint[1])), 3, (0, 0, 255), 2)
+            im0 = cv2.circle(im0, (int(avgMiddlePoint_x), int(avgMiddlePoint_y)), 3, (0, 230, 230), 2)
 
 
 
             # Kalman after update
-            #im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
+            im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
 
 
             if view_img:

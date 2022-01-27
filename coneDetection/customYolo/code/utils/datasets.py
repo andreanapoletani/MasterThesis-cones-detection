@@ -15,6 +15,7 @@ from multiprocessing.pool import Pool, ThreadPool
 from pathlib import Path
 from threading import Thread
 from zipfile import ZipFile
+import configparser
 
 import cv2
 import numpy as np
@@ -176,9 +177,14 @@ class LoadImages:
         # Load black mask image
         self.loadMask()
 
+        # Load ini settings file
+        self.loadIniSetting()
+
         # Initial ROI coordinates
-        self.roi_x = [186, 1178]
-        self.roi_y = [151, 407]
+        self.roi_x = [self.predictedROI[0]-(self.ROI_width/2), self.predictedROI[0]+(self.ROI_width/2)]
+        self.roi_y = [self.predictedROI[1]-(self.ROI_height/2), self.predictedROI[1]+(self.ROI_height/2)]
+        '''self.roi_x = [186, 1178]
+        self.roi_y = [151, 407]'''
 
 
         self.img_size = img_size
@@ -267,9 +273,19 @@ class LoadImages:
         return self.nf  # number of files
 
     def loadMask(self):
-        self.mask = cv2.imread('blackmask_lap30.png',0)
-        #self.mask = cv2.imread('blackmask_newLap30.png',0)
+        #self.mask = cv2.imread('blackmask_lap30.png',0)
+        self.mask = cv2.imread('blackmask_newLap30.png',0)
         return self.mask
+
+    def loadIniSetting(self):
+        # Load settings file
+        settingsFilePath = "./settings.ini"
+        config = configparser.ConfigParser()
+        config.read(settingsFilePath)
+        self.ROI_width = config.getint('ROI_parameters','ROI_width')
+        self.ROI_height = config.getint('ROI_parameters','ROI_height')
+        self.predictedROI = [config.getint('ROI_parameters','ROI_middlePoint_x'), config.getint('ROI_parameters','ROI_middlePoint_y')]
+        return self.ROI_width, self.ROI_height, self.predictedROI
 
     def updateROI(self, x, y):
         self.roi_x = x
