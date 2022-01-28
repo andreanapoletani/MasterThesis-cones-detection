@@ -46,6 +46,36 @@ settingsFilePath = "./settings.ini"
 config = configparser.ConfigParser()
 config.read(settingsFilePath)
 
+# Load camera settings file
+camFilePath = './camera.ini'
+cameraConfig = configparser.ConfigParser()
+cameraConfig.read(camFilePath)
+
+rotx = np.zeros((3,3))
+roty = np.zeros((3,3))
+rotz = np.zeros((3,3))
+rot = np.zeros((3,3))
+extrinsicPar = [cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic0'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic1'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic2')]
+t_vec = np.array([cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic3'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic4'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic5')]).T
+
+rotx[0][0] = 1.0
+rotx[2][2] = math.cos(extrinsicPar[0])
+rotx[1][1] = math.cos(extrinsicPar[0])
+rotx[1][2] = -math.sin(extrinsicPar[0])
+rotx[2][1] = math.sin(extrinsicPar[0])
+roty[1][1] = 1.0
+roty[2][2] = math.cos(extrinsicPar[1])
+roty[0][0] = math.cos(extrinsicPar[1])
+roty[2][0] = -math.sin(extrinsicPar[1])
+roty[0][2] = math.sin(extrinsicPar[1])
+rotz[2][2] = 1.0
+rotz[0][0] = math.cos(extrinsicPar[2])
+rotz[1][1] = math.cos(extrinsicPar[2])
+rotz[0][1] = -math.sin(extrinsicPar[2])
+rotz[1][0] = math.sin(extrinsicPar[2])
+rot = np.dot(rotx, np.dot(roty,rotz))
+
+
 # TRUE -> print ROI and control points
 # FALSE -> no prints
 drawDetails = True
@@ -151,6 +181,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     vid_path, vid_writer = [None] * bs, [None] * bs
 
     
+    #########################3
+    count_frames = 0
+    
 
     # Run inference
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
@@ -183,9 +216,13 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         middlePoint = []
         remainingCones = []
 
+        px = []
+        pz = []
+
 
         # Process predictions
         for i, det in enumerate(pred):  # per image
+
             seen += 1
             if webcam:  # batch_size >= 1
                 p, im0, frame = path[i], im0s[i].copy(), dataset.count
@@ -246,6 +283,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         if (c==1):
                             annotator.box_label(xyxy, label, color=[26, 140, 255])
 
+
                         # Update nearest cones (yellow and blu)
                         if (cls == 0 and xyxy[3].item() > nearestXY_blu[1]): 
                             nearestXY_blu[0]=xyxy[2].item() - (xyxy[2].item() - xyxy[0].item())/2
@@ -258,7 +296,15 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                             nearestXY_yellow[1]=xyxy[3].item()
                             nearestYel_wh = [xyxy[2].item() -  xyxy[0].item(), xyxy[3].item() -  xyxy[1].item()]
                             count_yellow += 1
-                        
+
+                        #####################
+                        #if (count_frames == 1):
+                        xyz = np.array([xyxy[0].item(), xyxy[1].item(), 1]).T
+                        #print(xyz.shape)
+                        new_xyz = np.dot(rot, xyz) + t_vec
+                        px.append(new_xyz[0])
+                        pz.append(new_xyz[2])
+
 
                         if save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
@@ -418,6 +464,10 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             if (middlePoint != [0,0]):
                 oldMiddlePoint = middlePoint
+
+            test = plt.scatter(px, pz)
+            plt.savefig('../dfolder/plots/result' + str(seen) +'.png')
+
     
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
@@ -429,11 +479,11 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         strip_optimizer(weights)  # update model (to fix SourceChangeWarning)
 
     y_mean = [np.mean(plot_inference_times) for i in plot_inference_times]
-    ax = plt.subplot()
+    '''ax = plt.subplot()
     data_line = ax.plot(plot_times, plot_inference_times, label='Data')
     mean_line = ax.plot(plot_times, y_mean, label='Mean', linestyle='--')
-    legend = ax.legend(loc='upper right')
-    
+    legend = ax.legend(loc='upper right')'''
+
     #plt.savefig('../volume/TesiMagistrale/inference_test/results/finalResults/RTX2070S_oldVideo.png')
 
 

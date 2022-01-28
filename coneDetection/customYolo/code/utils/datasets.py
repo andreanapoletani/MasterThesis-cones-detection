@@ -183,7 +183,6 @@ class LoadImages:
         # Initial ROI coordinates
         self.roi_x = [self.predictedROI[0]-(self.ROI_width/2), self.predictedROI[0]+(self.ROI_width/2)]
         self.roi_y = [self.predictedROI[1]-(self.ROI_height/2), self.predictedROI[1]+(self.ROI_height/2)]
-        print(self.roi_x, self.roi_y)
 
 
         self.img_size = img_size
