@@ -55,9 +55,13 @@ rotx = np.zeros((3,3))
 roty = np.zeros((3,3))
 rotz = np.zeros((3,3))
 rot = np.zeros((3,3))
-extrinsicPar = [cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic0'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic1'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic2')]
-t_vec = np.array([cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic3'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic4'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic5')]).T
+t_vec = np.zeros((3,1))
+k = np.zeros((3,3))
+k_inv = np.zeros((3,3))
 
+intrinsicPar = [cameraConfig.getfloat('CameraCalibrationParameters', 'LCamIntrinsic0'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamIntrinsic1'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamIntrinsic2'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamIntrinsic3'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamIntrinsic4'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamIntrinsic5'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamIntrinsic6')]
+extrinsicPar = [cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic0'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic1'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic2')]
+t_param = [cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic3'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic4'), cameraConfig.getfloat('CameraCalibrationParameters', 'LCamExtrinsic5')]
 rotx[0][0] = 1.0
 rotx[2][2] = math.cos(extrinsicPar[0])
 rotx[1][1] = math.cos(extrinsicPar[0])
@@ -75,6 +79,18 @@ rotz[0][1] = -math.sin(extrinsicPar[2])
 rotz[1][0] = math.sin(extrinsicPar[2])
 rot = np.dot(rotx, np.dot(roty,rotz))
 
+t_vec[0][0] = t_param[0]
+t_vec[1][0] = t_param[1]
+t_vec[2][0] = t_param[2]
+#rot = np.append(rot,t_vec, axis=1)
+
+k[0][0] = intrinsicPar[4]
+k[0][1] = 0 # skew
+k[0][2] = intrinsicPar[0] # x principal point
+k[1][1] = intrinsicPar[4]
+k[1][2] = intrinsicPar[1] #y principal point
+k[2][2] = 1
+k_inv = np.linalg.inv(k)
 
 # TRUE -> print ROI and control points
 # FALSE -> no prints
@@ -217,7 +233,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         remainingCones = []
 
         px = []
-        pz = []
+        py = []
+        p_col = []
 
 
         # Process predictions
@@ -299,11 +316,17 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
                         #####################
                         #if (count_frames == 1):
-                        xyz = np.array([xyxy[0].item(), xyxy[1].item(), 1]).T
+                        mid_x = xyxy[0].item()+(xyxy[2].item()-xyxy[0].item())/2
+                        #xyz = np.array([xyxy[0].item(), xyxy[1].item(), 1]).T
+                        uv_vec = np.array([[mid_x-(original_img.shape[1]/2)],[(original_img.shape[0]/2)-xyxy[3].item()], [1]])
+                        camPoint = np.dot(k_inv, uv_vec)
                         #print(xyz.shape)
-                        new_xyz = np.dot(rot, xyz) + t_vec
+                        new_xyz = np.dot(rot.T, camPoint - t_vec)
                         px.append(new_xyz[0])
-                        pz.append(new_xyz[2])
+                        py.append(new_xyz[1])
+                        if (cls == 0): p_col.append('#1a75ff')
+                        if (cls == 2): p_col.append('#ffff00')
+                        if (cls == 1): p_col.append('#ff8000')
 
 
                         if save_crop:
@@ -465,8 +488,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             if (middlePoint != [0,0]):
                 oldMiddlePoint = middlePoint
 
-            test = plt.scatter(px, pz)
+            test = plt.scatter(px, py, c=p_col)
             plt.savefig('../dfolder/plots/result' + str(seen) +'.png')
+            px = []
+            py = []
+            p_col = []
+            plt.clf()
 
     
     # Print results
