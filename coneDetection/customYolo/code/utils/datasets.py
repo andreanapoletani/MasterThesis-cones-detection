@@ -242,18 +242,12 @@ class LoadImages:
 
             # custom black mask applied on img ---------------------------------
             img0 = cv2.bitwise_and(img0,img0,mask = self.mask)
+            original_img = img0
+            img0 = img0[round(self.roi_y[0]):round(self.roi_y[1]), round(self.roi_x[0]):round(self.roi_x[1])]
+
             # --------------------------------------------
             assert img0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
-
-            # -----------------------> TEST
-
-            
-            # test inference on a ROI
-            #print(img0.shape)
-            original_img = img0
-            #img0 = img0[128:430, 225:1098] rettangolone centrale
-            #img0 = img0[roiy[0]:roiy[1], roix[0]:roix[1]]
             
         img = img0
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB

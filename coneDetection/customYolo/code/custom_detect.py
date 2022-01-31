@@ -88,13 +88,13 @@ k[0][0] = intrinsicPar[4]
 k[0][1] = 0 # skew
 k[0][2] = intrinsicPar[0] # x principal point
 k[1][1] = intrinsicPar[4]
-k[1][2] = intrinsicPar[1] #y principal point
+k[1][2] = intrinsicPar[1] # y principal point
 k[2][2] = 1
 k_inv = np.linalg.inv(k)
 
 # TRUE -> print ROI and control points
 # FALSE -> no prints
-drawDetails = True
+drawDetails = False
 
 
 @torch.no_grad()
@@ -339,7 +339,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 if (count_yellow == 0): 
                     nearestXY_yellow = old_nearestXY_yellow
 
-                # Don't consider the middlePoint of cones too far (blu and yellow) or too far from camera (check con distance with the 0 of the y)
+                # Don't consider the middlePoint of cones too far (blu and yellow) or too far from camera (check cone distance with the 0 of the y)
                 if ((nearestXY_blu[1] - nearestXY_yellow[1] > 40) and (nearestXY_yellow[1] < 0.2*original_img.shape[0])): 
                     nearestXY_yellow = old_nearestXY_yellow
                 if ((nearestXY_yellow[1] - nearestXY_blu[1] > 40) and (nearestXY_blu[1] < 0.2*original_img.shape[0])): 
