@@ -92,6 +92,7 @@ k[1][2] = intrinsicPar[1] # y principal point
 k[2][2] = 1
 k_inv = np.linalg.inv(k)
 
+
 # TRUE -> print ROI and control points
 # FALSE -> no prints
 drawDetails = False
@@ -183,6 +184,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     f.R = np.eye(2) * 0.35**2
     #f.Q = Q_discrete_white_noise(dim=2, dt=0.1, var=0.13)
     f.P = np.eye(2) * 500.
+
+    count_blu = 0
+    count_yellow = 0
 
 
     # Dataloader
@@ -317,6 +321,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         #####################
                         #if (count_frames == 1):
                         mid_x = xyxy[0].item()+(xyxy[2].item()-xyxy[0].item())/2
+                        #point = np.array([[mid_x],[xyxy[3].item()],[1]])
                         #xyz = np.array([xyxy[0].item(), xyxy[1].item(), 1]).T
                         uv_vec = np.array([[mid_x-(original_img.shape[1]/2)],[(original_img.shape[0]/2)-xyxy[3].item()], [1]])
                         camPoint = np.dot(k_inv, uv_vec)
