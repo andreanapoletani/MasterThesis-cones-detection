@@ -78,6 +78,7 @@ rotz[1][1] = math.cos(extrinsicPar[2])
 rotz[0][1] = -math.sin(extrinsicPar[2])
 rotz[1][0] = math.sin(extrinsicPar[2])
 rot = np.dot(rotx, np.dot(roty,rotz))
+irot = np.linalg.inv(rot)
 
 t_vec[0][0] = t_param[0]
 t_vec[1][0] = t_param[1]
@@ -95,7 +96,7 @@ k_inv = np.linalg.inv(k)
 
 # TRUE -> print ROI and control points
 # FALSE -> no prints
-drawDetails = False
+drawDetails = True
 
 
 @torch.no_grad()
@@ -326,7 +327,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         uv_vec = np.array([[mid_x-(original_img.shape[1]/2)],[(original_img.shape[0]/2)-xyxy[3].item()], [1]])
                         camPoint = np.dot(k_inv, uv_vec)
                         #print(xyz.shape)
-                        new_xyz = np.dot(rot.T, camPoint - t_vec)
+                        new_xyz = np.dot(irot, camPoint - t_vec)
                         px.append(new_xyz[0])
                         py.append(new_xyz[1])
                         if (cls == 0): p_col.append('#1a75ff')
