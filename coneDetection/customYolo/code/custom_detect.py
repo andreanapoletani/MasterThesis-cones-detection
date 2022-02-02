@@ -460,6 +460,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             f.x[1] = f.x[1] + (velocity_y*time)
 
             #new_fx = pic2roadCoor(f.x[0].item(), f.x[1].item(), original_img)
+            roadstate = road2picCoor(f.x[0].item(),f.x[1].item(), original_img)
             px.append(f.x[0])
             py.append(f.x[1])
             p_col.append(pointsColors.get(4))
@@ -501,6 +502,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
                 # Kalman after update
                 im0 = cv2.circle(im0, (int(f.x[0].item()), int(f.x[1].item())), 5, (255, 0, 0), 2)
+
+                im0 = cv2.circle(im0, (int(roadstate[0]), int(roadstate[0])), 5, (120, 201, 54), 3)
+
 
 
             if view_img:
@@ -599,12 +603,17 @@ def parse_opt():
 
 def pic2roadCoor(x,y,img):
     uv_vec = np.array([[x-(img.shape[1]/2)],[(img.shape[0]/2)-y], [1]])
-    camPoint = np.dot(k_inv, uv_vec)
-    new_xyz = np.dot(rot.T, camPoint + t_vec)
-    return new_xyz
+    normPoint = np.dot(k_inv, uv_vec)
+    roadCoor_xy = np.dot(rot.T, normPoint + t_vec)
+    return roadCoor_xy
 
-#def road2picCoor(x,y,img):
-
+def road2picCoor(x,y,img):
+    camCoor_vec = np.array([[x],[y], [1]])
+    normPoint = np.dot(k, camCoor_vec)
+    camCoor_uv = np.dot(rot, normPoint - t_vec)
+    #camCoor_xy = np.array([camCoor_uv[0].item() + img.shape[1]/2, img.shape[0]/2 - camCoor_uv[1].item()])
+    camCoor_xy = np.array([camCoor_uv[0].item(),camCoor_uv[1].item()])
+    return camCoor_xy
 
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
