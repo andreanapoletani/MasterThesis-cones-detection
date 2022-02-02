@@ -168,12 +168,11 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     old_velocity_y = 0
 
     # Model speed
-    velocity = config.getint('Kalman','velocity')
+    velocity = config.getfloat('Kalman','velocity')
 
     # Load initial ROI values from settings file
     ROI_width = config.getfloat('ROI_parameters','ROI_width')
     ROI_height = config.getfloat('ROI_parameters','ROI_height')
-    predictedROI = [config.getfloat('ROI_parameters','ROI_middlePoint_x'), config.getfloat('ROI_parameters','ROI_middlePoint_y')]
 
 
     middlePointsArray = np.empty([10, 2], dtype=int)
@@ -187,7 +186,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
     # Kalman Filter definition
     f = KalmanFilter(dim_x=2, dim_z=2)
-    f.x = np.array([[682, 150]]).T
+    #f.x = np.array([[config.getfloat('ROI_parameters','ROI_middlePoint_x'), config.getfloat('ROI_parameters','ROI_middlePoint_y')]]).T
     f.F = np.array([ [1.,1.], [0.,1.],])
     f.H = np.array([[1, 0],[0, 1]])
     f.R = np.eye(2) * 0.35**2
@@ -211,7 +210,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     vid_path, vid_writer = [None] * bs, [None] * bs
 
     
-    #########################
+    # Frame counter
     count_frames = 0
     
 
@@ -219,6 +218,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     model.warmup(imgsz=(1, 3, *imgsz), half=half)  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
     for path, im, im0s, vid_cap, s, original_img, padx, pady in dataset:
+
+        count_frames += 1
 
         t1 = time_sync()
         #print((t1 - precFrameTime)*1000)
@@ -329,10 +330,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                             nearestYel_wh = [xyxy[2].item() -  xyxy[0].item(), xyxy[3].item() -  xyxy[1].item()]
                             count_yellow += 1
 
-                        #####################
-                        #if (count_frames == 1):
+                        # Change coordinates to road plane
                         mid_x = xyxy[0].item()+(xyxy[2].item()-xyxy[0].item())/2
-                        new_xyz = changeCoor(mid_x, xyxy[2].item(), original_img)
+                        new_xyz = pic2roadCoor(mid_x, xyxy[3].item(), original_img)
                         px.append(new_xyz[0])
                         py.append(new_xyz[1])
                         p_col.append(pointsColors.get(c))
@@ -381,50 +381,92 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 nRowsCols = middlePointsArray.shape[0]
                 avgMiddlePoint_x = middlePointsSum_x/nRowsCols
                 avgMiddlePoint_y = middlePointsSum_y/nRowsCols
+                newMiddlePoint = pic2roadCoor(avgMiddlePoint_x, avgMiddlePoint_y, original_img)
                 z = np.array([[avgMiddlePoint_x], [avgMiddlePoint_y]])
             else:
+                newMiddlePoint = pic2roadCoor(middlePoint[0], middlePoint[1], original_img)
                 z = np.array([[middlePoint[0]], [middlePoint[1]]])
 
+            z_planeCoor = np.array([[newMiddlePoint[0].item()], [newMiddlePoint[1].item()]])
+            px.append(newMiddlePoint[0])
+            py.append(newMiddlePoint[1])
+            p_col.append(pointsColors.get(3))
 
-            # Calculate movement of midlle points on the axes
+            # calculate middlePoints and oldMiddlePoint in plane coordinates
+            pCoor_middlePoint = pic2roadCoor(middlePoint[0], middlePoint[1], original_img)
+            pCoor_oldMiddlePoint = pic2roadCoor(oldMiddlePoint[0], oldMiddlePoint[1], original_img)
+
+
+            # Calculate movement of midlle points on the axes in plane coordinates
             
-            #if (middlePoint != [0,0]):
-            if (middlePoint[1] > oldMiddlePoint[1]):
-                dx = -(middlePoint[0] - oldMiddlePoint[0])
-                dy = -(middlePoint[1] - oldMiddlePoint[1])
-            else:
-                dx = middlePoint[0] - oldMiddlePoint[0]
-                dy = middlePoint[1] - oldMiddlePoint[1]
+            # 1 quadrant
+            if (pCoor_middlePoint[0] < pCoor_oldMiddlePoint[0] and pCoor_middlePoint[1] > pCoor_oldMiddlePoint[1]):
+                dx = -1
+                dy = 1
+            # 2 quadrant
+            elif(pCoor_middlePoint[0] > pCoor_oldMiddlePoint[0] and pCoor_middlePoint[1] > pCoor_oldMiddlePoint[1]):
+                dx = 1
+                dy = 1
+            # 3 quadrant
+            elif(pCoor_middlePoint[0] < pCoor_oldMiddlePoint[0] and pCoor_middlePoint[1] < pCoor_oldMiddlePoint[1]):
+                dx = 1
+                dy = 1
+            # 4 quadrant
+            elif(pCoor_middlePoint[0] > pCoor_oldMiddlePoint[0] and pCoor_middlePoint[1] < pCoor_oldMiddlePoint[1]):
+                dx = -1
+                dy = 1
+
+            # image coordinates
+
+            '''# 1 quadrant
+            if (middlePoint[0] < oldMiddlePoint[0] and middlePoint[1] < oldMiddlePoint[1]):
+                dx = -1
+                dy = -1
+            # 2 quadrant
+            elif (middlePoint[0] > oldMiddlePoint[0] and middlePoint[1] < oldMiddlePoint[1]):
+                dx = 1
+                dy = -1
+            # 3 quadrant
+            elif (middlePoint[0] < oldMiddlePoint[0] and middlePoint[1] > oldMiddlePoint[1]):
+                dx = 1
+                dy = -1
+            # 4 quadrant
+            elif (middlePoint[0] > oldMiddlePoint[0] and middlePoint[1] > oldMiddlePoint[1]):
+                dx = -1
+                dy = -1'''
 
             time = (time_sync() - t1)*1000
             if (count_blu != 0 and count_yellow != 0):
-                if (dx < 0): 
-                    velocity_x = -velocity
-                    old_velocity_x = velocity_x
-                else:
-                    velocity_x = velocity
-                    old_velocity_x = velocity_x
-                if (dy < 0): 
-                    velocity_y = -velocity
-                    old_velocity_y = velocity_y
-                else:
-                    velocity_y = velocity
-                    old_velocity_x = velocity_x
+                velocity_x = dx * velocity
+                velocity_y = dy * velocity
+                old_velocity_x = velocity_x
+                old_velocity_y = velocity_y
             else:
                 velocity_x = old_velocity_x
                 velocity_y = old_velocity_y
 
+            # Set initial state only in the first frame
+            if (count_frames == 1):
+                newState_planeCoor_xy = pic2roadCoor(config.getfloat('ROI_parameters','ROI_middlePoint_x'), config.getfloat('ROI_parameters','ROI_middlePoint_y'), original_img)
+                f.x = np.array([[newState_planeCoor_xy[0].item(), newState_planeCoor_xy[1].item()]]).T
+
 
             f.predict()
             predictedVal = f.x
-            f.update(z)
+            f.update(z_planeCoor)
 
             # Update velocity
             f.x[0] = f.x[0] + (velocity_x*time)
             f.x[1] = f.x[1] + (velocity_y*time)
 
+            #new_fx = pic2roadCoor(f.x[0].item(), f.x[1].item(), original_img)
+            px.append(f.x[0])
+            py.append(f.x[1])
+            p_col.append(pointsColors.get(4))
+
             # move center of ROI on Kalman's result
-            predictedROI = [int(f.x[0].item()), int(f.x[1].item())]
+            #predictedROI = [int(f.x[0].item()), int(f.x[1].item())]
+            predictedROI = [784,279]
 
             #predictedROI = ext_xy
             newRoi_xxyy = updateRoiCoordinates(predictedROI, ROI_width, ROI_height, original_img.shape)
@@ -492,8 +534,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
 
             plt.scatter(px, py, c=p_col)
+            plt.xticks([])
+            plt.yticks([])
             plt.xlabel('x')
             plt.ylabel('y')
+            '''plt.xlim(-2, 2)
+            plt.ylim(-2, 2)'''
             plt.savefig('../dfolder/plots/result' + str(seen) +'.png')
             px = []
             py = []
@@ -551,12 +597,14 @@ def parse_opt():
     print_args(FILE.stem, opt)
     return opt
 
-def changeCoor(x,y,img):
+def pic2roadCoor(x,y,img):
     uv_vec = np.array([[x-(img.shape[1]/2)],[(img.shape[0]/2)-y], [1]])
     camPoint = np.dot(k_inv, uv_vec)
-    #print(xyz.shape)
-    new_xyz = np.dot(irot, camPoint - t_vec)
+    new_xyz = np.dot(rot.T, camPoint + t_vec)
     return new_xyz
+
+#def road2picCoor(x,y,img):
+
 
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
