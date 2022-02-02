@@ -94,6 +94,14 @@ k[2][2] = 1
 k_inv = np.linalg.inv(k)
 
 
+pointsColors = {
+    0 : '#1a75ff',
+    1 : '#ff8000',
+    2 : '#ffff00',
+    3 : '#99ff33', # middlePoint green
+    4 : '#ff3300' # predicted ROI
+}
+
 # TRUE -> print ROI and control points
 # FALSE -> no prints
 drawDetails = True
@@ -190,6 +198,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     count_yellow = 0
 
 
+
     # Dataloader
     if webcam:
         view_img = check_imshow()
@@ -202,7 +211,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     vid_path, vid_writer = [None] * bs, [None] * bs
 
     
-    #########################3
+    #########################
     count_frames = 0
     
 
@@ -237,6 +246,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         middlePoint = []
         remainingCones = []
 
+    
         px = []
         py = []
         p_col = []
@@ -322,17 +332,10 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         #####################
                         #if (count_frames == 1):
                         mid_x = xyxy[0].item()+(xyxy[2].item()-xyxy[0].item())/2
-                        #point = np.array([[mid_x],[xyxy[3].item()],[1]])
-                        #xyz = np.array([xyxy[0].item(), xyxy[1].item(), 1]).T
-                        uv_vec = np.array([[mid_x-(original_img.shape[1]/2)],[(original_img.shape[0]/2)-xyxy[3].item()], [1]])
-                        camPoint = np.dot(k_inv, uv_vec)
-                        #print(xyz.shape)
-                        new_xyz = np.dot(irot, camPoint - t_vec)
+                        new_xyz = changeCoor(mid_x, xyxy[2].item(), original_img)
                         px.append(new_xyz[0])
                         py.append(new_xyz[1])
-                        if (cls == 0): p_col.append('#1a75ff')
-                        if (cls == 2): p_col.append('#ffff00')
-                        if (cls == 1): p_col.append('#ff8000')
+                        p_col.append(pointsColors.get(c))
 
 
                         if save_crop:
@@ -382,13 +385,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             else:
                 z = np.array([[middlePoint[0]], [middlePoint[1]]])
 
-
-
-            '''# observation on center of ROI
-            if (middlePoint == [0,0]):
-                z = np.array([[oldMiddlePoint[0]], [oldMiddlePoint[1]]])
-            else:
-                z = np.array([[middlePoint[0]], [middlePoint[1]]])'''
 
             # Calculate movement of midlle points on the axes
             
@@ -494,7 +490,10 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             if (middlePoint != [0,0]):
                 oldMiddlePoint = middlePoint
 
-            test = plt.scatter(px, py, c=p_col)
+
+            plt.scatter(px, py, c=p_col)
+            plt.xlabel('x')
+            plt.ylabel('y')
             plt.savefig('../dfolder/plots/result' + str(seen) +'.png')
             px = []
             py = []
@@ -552,6 +551,12 @@ def parse_opt():
     print_args(FILE.stem, opt)
     return opt
 
+def changeCoor(x,y,img):
+    uv_vec = np.array([[x-(img.shape[1]/2)],[(img.shape[0]/2)-y], [1]])
+    camPoint = np.dot(k_inv, uv_vec)
+    #print(xyz.shape)
+    new_xyz = np.dot(irot, camPoint - t_vec)
+    return new_xyz
 
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
@@ -560,4 +565,5 @@ def main(opt):
 if __name__ == "__main__":
     opt = parse_opt()
     main(opt)
+
 
