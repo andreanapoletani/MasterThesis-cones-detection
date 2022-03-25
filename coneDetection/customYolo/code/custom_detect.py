@@ -277,6 +277,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             middlePointsArray[middlePointsIndex] = middlePoint
             middlePointsIndex += 1
 
+            # Moving average filter
             if (middlePointsCounter >= 10):
                 middlePointsSum_x = middlePointsArray[:,0].sum()
                 middlePointsSum_y = middlePointsArray[:,1].sum()
@@ -287,13 +288,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             else:
                 z = np.array([[middlePoint[0]], [middlePoint[1]]])
 
-
-
-            '''# observation on center of ROI
-            if (middlePoint == [0,0]):
-                z = np.array([[oldMiddlePoint[0]], [oldMiddlePoint[1]]])
-            else:
-                z = np.array([[middlePoint[0]], [middlePoint[1]]])'''
 
             # Calculate movement of midlle points on the axes
             
@@ -323,20 +317,19 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 velocity_x = old_velocity_x
                 velocity_y = old_velocity_y
 
-
+            # Kalman prediction phase
             f.predict()
-            predictedVal = f.x
-            print("Old: " + str(f.x[0]) + str(f.x[1]))
+            #Kalman update phase
             f.update(z)
 
-            # Update velocity
+            # Update state with uniform rectilinear motion
             f.x[0] = f.x[0] + (velocity_x*time)
             f.x[1] = f.x[1] + (velocity_y*time)
 
-            # move center of ROI on Kalman's result
+            # Move center of ROI on Kalman's result
             predictedROI = [int(f.x[0].item()), int(f.x[1].item())]
 
-            #predictedROI = ext_xy
+            # PredictedROI = ext_xy
             newRoi_xxyy = updateRoiCoordinates(predictedROI, ROI_width, ROI_height, original_img.shape)
             
 
@@ -393,6 +386,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer[i].write(im0)
 
+            # Update neareast cones
             old_nearestXY_blu = nearestXY_blu
             old_nearestXY_yellow = nearestXY_yellow
 
