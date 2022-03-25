@@ -855,10 +855,6 @@ def updateRoiCoordinates(newCenter, width, height, imgshape):
     return roixxyy
 
 
-def predictRoiPosition(centroid, middlePoint):
-    res = 1
-    return res  
-
 
 # Variables
 NCOLS = 0 if is_docker() else shutil.get_terminal_size().columns  # terminal window size for tqdm
